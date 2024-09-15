@@ -122,11 +122,11 @@ int main() {
         ImGuiViewport* viewport = ImGui::GetMainViewport();
         ImGui::SetNextWindowPos(viewport->Pos);
         ImGui::SetNextWindowSize(viewport->Size);
-        
-        ImGui::Begin("Image Channels", NULL, 
-            ImGuiWindowFlags_NoDecoration | 
-            ImGuiWindowFlags_NoMove | 
-            ImGuiWindowFlags_NoResize | 
+
+        ImGui::Begin("Image Channels", NULL,
+            ImGuiWindowFlags_NoDecoration |
+            ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoResize |
             ImGuiWindowFlags_NoCollapse);
 
         ImVec2 image_size = calc_image_size(img, viewport->Size.x, viewport->Size.y);
@@ -138,11 +138,19 @@ int main() {
         ImGui::Image((void*)(intptr_t)blueTexture, image_size);
 
         text_centered("Red Histogram");
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
         ImGui::PlotHistogram("Red", histogram[CHANNELRED], 256, 0, NULL, 0.0f, histogram_max_value, ImVec2(viewport->Size.x, HISTHEIGHT));
+        ImGui::PopStyleColor();
+
         text_centered("Green Histogram");
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
         ImGui::PlotHistogram("Green", histogram[CHANNELGREEN], 256, 0, NULL, 0.0f, histogram_max_value, ImVec2(viewport->Size.x, HISTHEIGHT));
+        ImGui::PopStyleColor();
+
         text_centered("Blue Histogram");
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.0f, 0.0f, 1.0f, 1.0f));
         ImGui::PlotHistogram("Blue", histogram[CHANNELBLUE], 256, 0, NULL, 0.0f, histogram_max_value, ImVec2(viewport->Size.x, HISTHEIGHT));
+        ImGui::PopStyleColor();
 
         ImGui::End();
 
