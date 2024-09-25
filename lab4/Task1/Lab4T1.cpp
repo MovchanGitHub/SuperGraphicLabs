@@ -15,12 +15,14 @@ class point {
     std::vector<double> cords;
 
 public:
-    point(double x, double y) : cords{ x, y, 1 } {}
-    double x() {
-        return cords[0];
-    }
-    double y() {
-        return cords[1];
+    const double& x;
+    const double& y;
+    point(double x, double y) : cords{ x, y, 1 }, x(cords[0]), y(cords[1]) {}
+    point(const point& p) : cords(p.cords), x(cords[0]), y(cords[1]) {}
+    point& operator=(const point& p) {
+        cords[0] = p.cords[0];
+        cords[1] = p.cords[1];
+        return *this;
     }
     void affine_transformation(std::vector<std::vector<double>>& m) {
         std::vector<double> ncords(3);
@@ -47,10 +49,10 @@ void DrawPoint(int x, int y, float intencity, ImColor c) {
 }
 
 void DrawLineBresenham(point p0, point p1, ImVec4 c1, ImVec4 c2) {
-    int x0 = p0.x();
-    int y0 = p0.y();
-    int x1 = p1.x();
-    int y1 = p1.y();
+    int x0 = p0.x;
+    int y0 = p0.y;
+    int x1 = p1.x;
+    int y1 = p1.y;
 
     int dx = abs(x1 - x0);
     int dy = abs(y1 - y0);
@@ -90,10 +92,10 @@ void DrawLineBresenham(point p0, point p1, ImVec4 c1, ImVec4 c2) {
 }
 
 void DrawLineWu(point p0, point p1, ImVec4 c1, ImVec4 c2) {
-    int x0 = p0.x();
-    int y0 = p0.y();
-    int x1 = p1.x();
-    int y1 = p1.y();
+    int x0 = p0.x;
+    int y0 = p0.y;
+    int x1 = p1.x;
+    int y1 = p1.y;
 
     int dx = x1 - x0;
     int dy = y1 - y0;
@@ -150,7 +152,9 @@ public:
             ++nit;
             if (nit == points.end())
                 nit = points.begin();
-            area += it->x() * nit->y() - nit->x() * it->y();
+            point& p1 = *it;
+            point& p2 = *nit;
+            area += p1.x * p2.y - p2.x * p1.y;
             if (nit == points.begin()) break;
             it = nit;
         }
@@ -160,6 +164,14 @@ public:
 
     point centroid() {
         if (!points.size()) return {0, 0};
+        if (points.size() == 1) {
+            return center = points.front();
+        }
+        if (points.size() == 2) {
+            return center = 
+            {   (points.front().x + points.back().x) / 2, 
+                (points.front().y + points.back().y) / 2 };
+        }
 
         int n = points.size();
         double area = polygon_area();
@@ -171,9 +183,11 @@ public:
             ++nit;
             if (nit == points.end())
                 nit = points.begin();
-            double fact = it->x() * nit->y() - nit->x() * it->y();
-            Cx += (it->x() + nit->x()) * fact;
-            Cy += (it->y() + nit->y()) * fact;
+            point& p1 = *it;
+            point& p2 = *nit;
+            double fact = p1.x * p2.y - p2.x * p1.y;
+            Cx += (p1.x + p2.x) * fact;
+            Cy += (p1.y + p2.y) * fact;
             if (nit == points.begin()) break;
             it = nit;
         }
@@ -199,11 +213,11 @@ public:
 
     void draw() {
         if (points.size() == 0) return;
-        DrawPoint(center.x(), center.y(),
+        DrawPoint(center.x, center.y,
             1, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
         ImVec4 border_color = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
         if (points.size() == 1) {
-            DrawPoint(points.front().x(), points.front().y(), 1, border_color);
+            DrawPoint(points.front().x, points.front().y, 1, border_color);
         }
         else if (points.size() == 2) {
             DrawLineWu(points.front(), points.back(),
@@ -279,12 +293,12 @@ void general_transformation(point p, std::vector<std::vector<double>> matr) {
     double dx = offset_matr[2][0];
     double dy = offset_matr[2][0];
 
-    offset_matr[2][0] = -p.x();
-    offset_matr[2][1] = -p.y();
+    offset_matr[2][0] = -p.x;
+    offset_matr[2][1] = -p.y;
 
     matr = matr_mult(offset_matr, matr);
-    offset_matr[2][0] = p.x();
-    offset_matr[2][1] = p.y();
+    offset_matr[2][0] = p.x;
+    offset_matr[2][1] = p.y;
     matr = matr_mult(matr, offset_matr);
     pol.affine_transformation(matr);
 
