@@ -300,13 +300,11 @@ public:
         double prev = 0, cur = 0;
         for (auto it = points.begin(); it != points.end(); ++it) {
             auto it_next = std::next(it, 1);
-            auto it_next_next = std::next(it, 2);
+            if (it_next == points.end())
+                it_next = points.begin();
+            auto it_next_next = std::next(it_next, 1);
             if (it_next_next == points.end())
                 it_next_next = points.begin();
-            if (it_next == points.end()) {
-                it_next = points.begin();
-                it_next_next = std::next(it_next, 1);
-            }
             cur = cross_product(*it, *it_next, *it_next_next);
             if (std::abs(cur) > 0.0001f) {
                 if (cur * prev < 0)
