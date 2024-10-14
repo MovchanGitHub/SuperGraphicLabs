@@ -22,9 +22,9 @@
 #include <math.h>
 
 const int WINDOW_SIZE = 1200;
-std::string fname = "Koch_snowflake.txt";
+//std::string fname = "Koch_snowflake.txt";
 //std::string fname = "Bush1.txt";
-//std::string fname = "Gosper_curve.txt";
+std::string fname = "Gosper_curve.txt";
 //std::string fname = "Tree.txt";
 
 class point {
@@ -113,55 +113,42 @@ struct LSystem {
 
     void draw() {
         std::string to_draw = generate();
-        float scale = 1;
         float minX = 0;
         float minY = 0;
-        while (true) {
-            std::stack<point> st;
-            point from(0, 0);
-            float nminX = 0;
-            float nminY = 0;
-            float nmaxY = 0;
-            float nmaxX = 0;
-            point direction = radiusVector;
-            for (auto c : to_draw) {
-                switch (c) {
-                case '+':
-                    direction.rotate(angle);
-                    break;
-                case '-':
-                    direction.rotate(-angle);
-                    break;
-                case '[':
-                    st.push(from);
-                    break;
-                case ']':
-                    from = st.top();
-                    st.pop();
-                    break;
-                case 'F':
-                    point to = from + direction * scale;
-                    nminX = std::min(nminX, to.x);
-                    nminY = std::min(nminY, to.y);
-                    nmaxX = std::max(nmaxX, to.x);
-                    nmaxY = std::max(nmaxY, to.y);
-                    std::swap(from, to);
-                    break;
-                }
-            }
-            if (std::max(nmaxX - nminX, nmaxY - nminY) > WINDOW_SIZE - 100) {
-                scale--;
+        float maxX = 0;
+        float maxY = 0;
+        std::stack<point> st;
+        point from(0, 0);
+        point direction = radiusVector;
+        for (auto c : to_draw) {
+            switch (c) {
+            case '+':
+                direction.rotate(angle);
+                break;
+            case '-':
+                direction.rotate(-angle);
+                break;
+            case '[':
+                st.push(from);
+                break;
+            case ']':
+                from = st.top();
+                st.pop();
+                break;
+            case 'F':
+                point to = from + direction;
+                minX = std::min(minX, to.x);
+                minY = std::min(minY, to.y);
+                maxX = std::max(maxX, to.x);
+                maxY = std::max(maxY, to.y);
+                std::swap(from, to);
                 break;
             }
-            minX = nminX;
-            minY = nminY;
-            scale++;
         }
-
-        std::stack<point> st;
-        point direction = radiusVector;
+        float scale = (WINDOW_SIZE - 100) / std::max(maxX - minX, maxY - minY);
+        direction = radiusVector;
         ImColor color(0, 0, 0, 255);
-        point from = point(minX - 50, minY - 50) * -1;
+        from = point(scale * minX - 50, scale * minY - 50) * -1;
         for (auto c : to_draw) {
             switch (c) {
             case '+':
