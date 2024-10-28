@@ -1,7 +1,8 @@
 ﻿#include <iostream>
 #include <vector>
 #include <list>
-#include <glad/glad.h>
+//#include <glad/glad.h>
+#include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
 #include <imgui.h>
@@ -32,6 +33,9 @@ public:
             for (int k = 0; k < 4; ++k)
                 ncords[j] += cords[k] * m[k][j];
         cords = ncords;
+        x = cords[0];
+        y = cords[1];
+        z = cords[2];
     }
 };
 
@@ -86,6 +90,7 @@ void DrawLineWu(point p0, point p1, ImColor c) {
 
 class polyhedron {
     std::vector<point> vertices;
+    std::vector<point> view_vertices;
 
     struct polygon {
         std::list<point*> vertices;
@@ -124,9 +129,16 @@ class polyhedron {
 public:
     polyhedron(uint number_of_faces): faces(number_of_faces) {}
 
-    void affine_transformation(std::vector<std::vector<double>>& m) {
+    void apply_view_matr(std::vector<std::vector<double>>& view_m) {
+        view_vertices.assign(vertices.begin(), vertices.end());
+        for (auto it = view_vertices.begin(); it != view_vertices.end(); ++it)
+            it->affine_transformation(view_m);
+    }
+
+    void affine_transformation(std::vector<std::vector<double>>& m, std::vector<std::vector<double>>& view) {
         for (auto it = vertices.begin(); it != vertices.end(); ++it)
             it->affine_transformation(m);
+        this->apply_view_matr(view);
     }
     
     void draw() const {
@@ -140,17 +152,40 @@ public:
     }
 
     void tie_vertex_to_face(uint vertex_index, uint face_index) {
-        pol.faces[face_index].add_point(&vertices[vertex_index]);
+        pol.faces[face_index].add_point(&view_vertices[vertex_index]);
+    }
+
+    point centroid() const {
+        double x_sum = 0, y_sum = 0, z_sum = 0;
+        for (const auto& vertex : vertices) {
+            x_sum += vertex.x;
+            y_sum += vertex.y;
+            z_sum += vertex.z;
+        }
+        size_t count = vertices.size();
+        return { x_sum / count, y_sum / count, z_sum / count };
+    }
+
+    void clear() {
+        int face_count = faces.size();
+        faces.clear();
+        faces = std::vector<polygon>(face_count);
+        vertices.clear();
+        view_vertices.clear();
     }
 } pol(20);
 
 std::vector<std::vector<double>> offset_matr(4, std::vector<double>(4));
 std::vector<std::vector<double>> rotate_matr(4, std::vector<double>(4));
 std::vector<std::vector<double>> scalin_matr(4, std::vector<double>(4));
+std::vector<std::vector<double>> view_matr(4, std::vector<double>(4));
 
 void initialize_matrixes() {
     offset_matr[0][0] = offset_matr[1][1] = offset_matr[2][2] = offset_matr[3][3] = 1;
     scalin_matr[0][0] = scalin_matr[1][1] = scalin_matr[2][2] = scalin_matr[3][3] = 1;
+    view_matr[0][0] = view_matr[1][1] = view_matr[2][2] = view_matr[3][3] = 1;
+    view_matr[3][0] = 750;
+    view_matr[3][1] = 550;
 }
 
 std::vector<std::vector<double>> matr_mult(
@@ -209,15 +244,16 @@ void build_polyhedron() {
         pol.add_point(bottom);
     }
 
+    top = { 0, h / 2 + r * sqrt(4 * sin(M_PI / 5) * sin(M_PI / 5) - 1), 0 };
+    bottom = { 0, -(h / 2 + r * sqrt(4 * sin(M_PI / 5) * sin(M_PI / 5) - 1)), 0 };
+    pol.add_point(top);
+    pol.add_point(bottom);
+    pol.apply_view_matr(view_matr);
     for (int i = 0; i < 10; ++i) {
         pol.tie_vertex_to_face(i, i);
         pol.tie_vertex_to_face((i + 1) % 10, i);
         pol.tie_vertex_to_face((i + 2) % 10, i);
     }
-    top = { 0, h / 2 + r * sqrt(4 * sin(M_PI / 5) * sin(M_PI / 5) - 1), 0 };
-    bottom = { 0, -(h / 2 + r * sqrt(4 * sin(M_PI / 5) * sin(M_PI / 5) - 1)), 0 };
-    pol.add_point(top);
-    pol.add_point(bottom);
     for (int i = 0; i < 5; ++i) {
         pol.tie_vertex_to_face(2 * i, 10 + 2 * i);
         pol.tie_vertex_to_face((2 * i) % 10, 10 + 2 * i);
@@ -239,6 +275,8 @@ void build_cube() {
     pol.add_point({ 200, 800, 400 });
     pol.add_point({ 600, 800, 400 });
     pol.add_point({ 600, 400, 400 });
+
+    pol.apply_view_matr(view_matr);
 
     pol.tie_vertex_to_face(0, 0);
     pol.tie_vertex_to_face(1, 0);
@@ -309,8 +347,10 @@ void draw_UI() {
         ImGuiWindowFlags_NoCollapse);
 
 
-    if (ImGui::Button("Clear Window", ImVec2(100, 50))) {
-
+    if (ImGui::Button("Reset Window", ImVec2(100, 50))) {
+        pol.clear();
+        initialize_matrixes();
+        build_polyhedron();
     }
 
 
@@ -331,7 +371,7 @@ void draw_UI() {
         offset_matr[3][2] = -dz;
     ImGui::SetCursorPos(ImVec2(250, 27));
     if (ImGui::Button("Shift", ImVec2(100, 50))) {
-        pol.affine_transformation(offset_matr);
+        pol.affine_transformation(offset_matr, view_matr);
     }
 
     ImGui::SetNextItemWidth(100);
@@ -355,45 +395,77 @@ void draw_UI() {
     if (ImGui::RadioButton("Z", &rotate_index, 2)) {
         change_rotate_mart(teta, rotate_index);
     }
+    ImGui::SetCursorPos(ImVec2(360, 75));
+    static bool by_center_rot = 0;
+    ImGui::Checkbox("rotate by center", &by_center_rot);
     ImGui::SetCursorPos(ImVec2(480, 27));
     if (ImGui::Button("Rotate", ImVec2(100, 50))) {
-        auto m = general_transformation({ 300, 300, 300 }, rotate_matr);
-        pol.affine_transformation(m);
+        point p = { 300, 300, 300 };
+        if (by_center_rot)
+            p = pol.centroid();
+        auto m = general_transformation(p, rotate_matr);
+        pol.affine_transformation(m, view_matr);
     }
 
     ImGui::SetCursorPos(ImVec2(590, 27));
     ImGui::SetNextItemWidth(100);
     static float kx = 1;
-    if (ImGui::InputFloat("kx", &kx))
-        scalin_matr[0][0] = kx;
+    ImGui::InputFloat("kx", &kx);
     ImGui::SetNextItemWidth(100);
     ImGui::SetCursorPos(ImVec2(590, 50));
     static float ky = 1;
-    if (ImGui::InputFloat("ky", &ky))
-        scalin_matr[1][1] = ky;
+    ImGui::InputFloat("ky", &ky);
     ImGui::SetNextItemWidth(100);
     ImGui::SetCursorPos(ImVec2(590, 73));
     static float kz = 1;
-    if (ImGui::InputFloat("kz", &kz))
-        scalin_matr[2][2] = kz;
+    ImGui::InputFloat("kz", &kz);
     ImGui::SetCursorPos(ImVec2(720, 27));
+    static bool by_center_sc = 0;
+    ImGui::Checkbox("by center", &by_center_sc);
+    ImGui::SetCursorPos(ImVec2(815, 27));
     if (ImGui::Button("Scale", ImVec2(100, 50))) {
-        pol.affine_transformation(scalin_matr);
+        scalin_matr[0][0] = kx;
+        scalin_matr[1][1] = ky;
+        scalin_matr[2][2] = kz;
+        if (by_center_sc) {
+            auto m = general_transformation(pol.centroid(), scalin_matr);
+            pol.affine_transformation(m, view_matr);
+        }
+        else
+            pol.affine_transformation(scalin_matr, view_matr);
     }
 
+    static int refl_index = -1;
+    ImGui::SetNextItemWidth(100);
+    ImGui::SetCursorPos(ImVec2(925, 27));
+    ImGui::RadioButton("Oyz", &refl_index, 0);
+    ImGui::SetCursorPos(ImVec2(975, 27));
+    ImGui::RadioButton("Oxz", &refl_index, 1);
+    ImGui::SetCursorPos(ImVec2(1025, 27));
+    ImGui::RadioButton("Oxy", &refl_index, 2);
+    ImGui::SetCursorPos(ImVec2(1080, 27));
+    if (ImGui::Button("Reflect", ImVec2(100, 50))) {
+        scalin_matr[0][0] = refl_index == 0 ? -1 : 1;
+        scalin_matr[1][1] = refl_index == 1 ? -1 : 1;
+        scalin_matr[2][2] = refl_index == 2 ? -1 : 1;
+        pol.affine_transformation(scalin_matr, view_matr);
+    }
+   
     ImGui::End();
 }
 
 int main() {
     if (!glfwInit()) return -1;
 
+    glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
     GLFWwindow* window = glfwCreateWindow(1500, 1000, "Task 2", NULL, NULL);
     if (!window) {
         glfwTerminate();
         return -1;
     }
     glfwMakeContextCurrent(window);
-    gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+    //gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+    glewInit();
     glfwSwapInterval(1);
 
     IMGUI_CHECKVERSION();
