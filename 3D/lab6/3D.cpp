@@ -145,9 +145,9 @@ class polyhedron {
         }
     };
 
+public:
     std::vector<polygon> faces;
 
-public:
     polyhedron(uint number_of_faces): faces(number_of_faces) {}
 
     void apply_view_matr(std::vector<std::vector<double>>& view_m) {
@@ -210,7 +210,7 @@ void initialize_matrixes() {
     view_matr[0][0] = view_matr[1][1] = view_matr[2][2] = view_matr[3][3] = 1;
     projection_matr[0][0] = projection_matr[1][1] = projection_matr[2][2] = projection_matr[3][3] = 1;
     base_proj_matr = projection_matr;
-    view_matr[3][0] = 750;
+    view_matr[3][0] = 950;
     view_matr[3][1] = 550;
 }
 
@@ -236,7 +236,9 @@ std::vector<std::vector<double>> general_transformation(point p, std::vector<std
     return matr;
 }
 
-void build_polyhedron() {
+void build_icosahedron() {
+    pol = polyhedron(20);
+
     double r = h / (2 * sin(M_PI / 5) * sin(M_PI / 3));
     point top{ r, h / 2, 0 };
     point bottom{ r, -h / 2, 0 };
@@ -281,15 +283,17 @@ void build_polyhedron() {
 }
 
 void build_cube() {
-    pol.add_point({ 300, 300, 0 });
-    pol.add_point({ 300, 700, 0 });
-    pol.add_point({ 700, 700, 0 });
-    pol.add_point({ 700, 300, 0 });
+    pol = polyhedron(6);
 
-    pol.add_point({ 200, 400, 400 });
-    pol.add_point({ 200, 800, 400 });
-    pol.add_point({ 600, 800, 400 });
-    pol.add_point({ 600, 400, 400 });
+    pol.add_point({ -50, -50, -50 });
+    pol.add_point({ +50, -50, -50 });
+    pol.add_point({ +50, +50, -50 });
+    pol.add_point({ -50, +50, -50 });
+
+    pol.add_point({ -50, -50, +50 });
+    pol.add_point({ +50, -50, +50 });
+    pol.add_point({ +50, +50, +50 });
+    pol.add_point({ -50, +50, +50 });
 
     pol.apply_view_matr(view_matr);
 
@@ -324,6 +328,118 @@ void build_cube() {
     pol.tie_vertex_to_face(6, 5);
 }
 
+void build_tetrahedron() {
+    pol = polyhedron(4);
+
+    pol.add_point({ -50, -50, -50 });
+    pol.add_point({ +50, +50, -50 });
+
+    pol.add_point({ +50, -50, +50 });
+    pol.add_point({ -50, +50, +50 });
+
+    pol.apply_view_matr(view_matr);
+
+    pol.tie_vertex_to_face(0, 0);
+    pol.tie_vertex_to_face(1, 0);
+    pol.tie_vertex_to_face(2, 0);
+
+    pol.tie_vertex_to_face(1, 1);
+    pol.tie_vertex_to_face(2, 1);
+    pol.tie_vertex_to_face(3, 1);
+
+    pol.tie_vertex_to_face(2, 2);
+    pol.tie_vertex_to_face(3, 2);
+    pol.tie_vertex_to_face(0, 2);
+
+    pol.tie_vertex_to_face(3, 3);
+    pol.tie_vertex_to_face(0, 3);
+    pol.tie_vertex_to_face(1, 3);
+}
+
+void build_dodecahedron() {
+    build_icosahedron();
+    std::vector<point> points;
+    for (auto& face : pol.faces) {
+        point np = { 0, 0, 0 };
+        int cnt = 0;
+        for (auto p : face.vertices) {
+            ++cnt;
+            np.x += p->x;
+            np.y += p->y;
+            np.z += p->z;
+        }
+        np.x /= cnt;
+        np.y /= cnt;
+        np.z /= cnt;
+        points.push_back(np);
+    }
+    pol = polyhedron(12);
+    for (auto p : points)
+        pol.add_point(p);
+    pol.apply_view_matr(view_matr);
+    pol.tie_vertex_to_face(8, 0);
+    pol.tie_vertex_to_face(0, 0);
+    pol.tie_vertex_to_face(2, 0);
+    pol.tie_vertex_to_face(12, 0);
+    pol.tie_vertex_to_face(10, 0);
+    //for (int i = 0; i < 10; ++i) {
+    //    pol.tie_vertex_to_face((i + 9) % 10, i);
+    //    pol.tie_vertex_to_face(i, i);
+    //    pol.tie_vertex_to_face((i + 1) % 10, i);
+    //    pol.tie_vertex_to_face(10 + i, i);
+    //    pol.tie_vertex_to_face(10 + (i + 1) % 10, i);
+    //}
+    for (int i = 10; i < 20; i += 2)
+        pol.tie_vertex_to_face(i, 10);
+    for (int i = 10; i < 20; i += 2)
+        pol.tie_vertex_to_face(i + 1, 11);
+}
+
+void build_octahedron() {
+    pol = polyhedron(8);
+
+    pol.add_point({ 0, -50, 0 });
+    pol.add_point({ +50, 0, 0 });
+    pol.add_point({ 0, +50, 0 });
+    pol.add_point({ -50, 0, 0 });
+    pol.add_point({ 0, 0, +50 });
+    pol.add_point({ 0, 0, -50 });
+
+    pol.apply_view_matr(view_matr);
+
+    pol.tie_vertex_to_face(0, 0);
+    pol.tie_vertex_to_face(1, 0);
+    pol.tie_vertex_to_face(4, 0);
+
+    pol.tie_vertex_to_face(4, 1);
+    pol.tie_vertex_to_face(1, 1);
+    pol.tie_vertex_to_face(2, 1);
+
+    pol.tie_vertex_to_face(3, 2);
+    pol.tie_vertex_to_face(4, 2);
+    pol.tie_vertex_to_face(2, 2);
+
+    pol.tie_vertex_to_face(0, 3);
+    pol.tie_vertex_to_face(4, 3);
+    pol.tie_vertex_to_face(3, 3);
+
+    pol.tie_vertex_to_face(5, 4);
+    pol.tie_vertex_to_face(1, 4);
+    pol.tie_vertex_to_face(0, 4);
+
+    pol.tie_vertex_to_face(5, 5);
+    pol.tie_vertex_to_face(3, 5);
+    pol.tie_vertex_to_face(0, 5);
+
+    pol.tie_vertex_to_face(5, 5);
+    pol.tie_vertex_to_face(2, 5);
+    pol.tie_vertex_to_face(1, 5);
+
+    pol.tie_vertex_to_face(5, 5);
+    pol.tie_vertex_to_face(3, 5);
+    pol.tie_vertex_to_face(2, 5);
+}
+
 void change_rotate_mart(double teta, int rotate_index) {
     for (int i = 0; i < 4; ++i)
         for (int j = 0; j < 4; ++j)
@@ -351,7 +467,6 @@ void change_rotate_mart(double teta, int rotate_index) {
         break;
     }
 }
-
 
 bool isDrawingLine = false;
 std::vector<std::vector<double>> rotate_matr_line(4, std::vector<double>(4));
@@ -408,6 +523,26 @@ std::vector<std::vector<double>> create_perspective_matrix(double c) {
     return perspec_matrix;
 }
 
+void change_pol(int choose) {
+    switch (choose) {
+    case 6:
+        build_cube();
+        break;
+    case 4:
+        build_tetrahedron();
+        break;
+    case 8:
+        build_octahedron();
+        break;
+    case 20:
+        build_icosahedron();
+        break;
+    case 12:
+        build_dodecahedron();
+        break;
+    }
+
+}
 
 void draw_UI() {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -418,13 +553,27 @@ void draw_UI() {
         ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoCollapse);
 
-
-    if (ImGui::Button("Reset Window", ImVec2(100, 50))) {
-        pol.clear();
-        initialize_matrixes();
-        build_polyhedron();
+    static int choose = 0;
+    ImGui::SetCursorPos(ImVec2(10, 25));
+    if (ImGui::RadioButton("6", &choose, 6)) {
+        change_pol(choose);
     }
-
+    ImGui::SetCursorPos(ImVec2(40, 25));
+    if (ImGui::RadioButton("4", &choose, 4)) {
+        change_pol(choose);
+    }
+    ImGui::SetCursorPos(ImVec2(70, 25));
+    if (ImGui::RadioButton("20", &choose, 20)) {
+        change_pol(choose);
+    }
+    ImGui::SetCursorPos(ImVec2(25, 50));
+    if (ImGui::RadioButton("8", &choose, 8)) {
+        change_pol(choose);
+    }
+    ImGui::SetCursorPos(ImVec2(55, 50));
+    if (ImGui::RadioButton("12", &choose, 12)) {
+        change_pol(choose);
+    }
 
     ImGui::SetCursorPos(ImVec2(120, 27));
     static int dx = 0;
@@ -699,7 +848,6 @@ int main() {
     ImGui_ImplOpenGL3_Init("#version 130");
 
     initialize_matrixes();
-    build_polyhedron();
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
