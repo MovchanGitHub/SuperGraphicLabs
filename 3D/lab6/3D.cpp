@@ -1,7 +1,6 @@
 ﻿#include <iostream>
 #include <vector>
 #include <list>
-//#include <glad/glad.h>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
@@ -27,15 +26,26 @@ public:
         cords = p.cords;
         return *this;
     }
+
+    void normalize() {
+        if (cords[3] != 0) {
+            cords[0] /= cords[3];
+            cords[1] /= cords[3];
+            cords[2] /= cords[3];
+            cords[3] = 1;
+        }
+        x = cords[0];
+        y = cords[1];
+        z = cords[2];
+    }
+
     void affine_transformation(std::vector<std::vector<double>>& m) {
         std::vector<double> ncords(4);
         for (int j = 0; j < 4; ++j)
             for (int k = 0; k < 4; ++k)
                 ncords[j] += cords[k] * m[k][j];
         cords = ncords;
-        x = cords[0];
-        y = cords[1];
-        z = cords[2];
+        normalize();
     }
 };
 
@@ -140,7 +150,7 @@ public:
             it->affine_transformation(m);
         this->apply_view_matr(view);
     }
-    
+
     void draw() const {
         for (const polygon& face : faces)
             face.draw();
@@ -179,6 +189,7 @@ std::vector<std::vector<double>> offset_matr(4, std::vector<double>(4));
 std::vector<std::vector<double>> rotate_matr(4, std::vector<double>(4));
 std::vector<std::vector<double>> scalin_matr(4, std::vector<double>(4));
 std::vector<std::vector<double>> view_matr(4, std::vector<double>(4));
+std::vector<std::vector<double>> base_view_matr(4, std::vector<double>(4));
 
 void initialize_matrixes() {
     offset_matr[0][0] = offset_matr[1][1] = offset_matr[2][2] = offset_matr[3][3] = 1;
@@ -186,6 +197,7 @@ void initialize_matrixes() {
     view_matr[0][0] = view_matr[1][1] = view_matr[2][2] = view_matr[3][3] = 1;
     view_matr[3][0] = 750;
     view_matr[3][1] = 550;
+    base_view_matr = view_matr;
 }
 
 std::vector<std::vector<double>> matr_mult(
@@ -223,8 +235,8 @@ std::vector<std::vector<double>> general_transformation(point p, std::vector<std
 
 void build_polyhedron() {
     double r = h / (2 * sin(M_PI / 5) * sin(M_PI / 3));
-    point top{r, h / 2, 0};
-    point bottom{r, -h / 2, 0};
+    point top{ r, h / 2, 0 };
+    point bottom{ r, -h / 2, 0 };
     std::vector<std::vector<double>> rotate_y36(4, std::vector<double>(4));
     rotate_y36[0][0] = rotate_y36[2][2] = cos(M_PI / 5);
     rotate_y36[2][0] = sin(M_PI / 5);
@@ -266,10 +278,10 @@ void build_polyhedron() {
 }
 
 void build_cube() {
-    pol.add_point({300, 300, 0});
-    pol.add_point({300, 700, 0});
-    pol.add_point({700, 700, 0});
-    pol.add_point({700, 300, 0});
+    pol.add_point({ 300, 300, 0 });
+    pol.add_point({ 300, 700, 0 });
+    pol.add_point({ 700, 700, 0 });
+    pol.add_point({ 700, 300, 0 });
 
     pol.add_point({ 200, 400, 400 });
     pol.add_point({ 200, 800, 400 });
@@ -336,6 +348,69 @@ void change_rotate_mart(double teta, int rotate_index) {
         break;
     }
 }
+
+
+bool isDrawingLine = false;
+std::vector<std::vector<double>> rotate_matr_line(4, std::vector<double>(4));
+
+void change_rotate_around_line(double alpha, point p1, point p2) {
+
+    std::vector<double> direct_vect = { p2.x - p1.x, p2.y - p1.y, p2.z - p1.z };
+    double len = sqrt(pow(direct_vect[0], 2) + pow(direct_vect[1], 2) + pow(direct_vect[2], 2));
+    std::vector<double> unit_vector = { direct_vect[0] / len, direct_vect[1] / len, direct_vect[2] / len };
+    point pointA = p1;
+    double a = pointA.x;
+    double b = pointA.y;
+    double c = pointA.z;
+    double l = unit_vector[0];
+    double m = unit_vector[1];
+    double n = unit_vector[2];
+    double d = sqrt(pow(m, 2) + pow(n, 2));
+
+    rotate_matr_line = {
+    {pow(l, 2) + (1 - pow(l, 2)) * cos(alpha), l * (1 - cos(alpha)) * m + n * sin(alpha), l * (1 - cos(alpha)) * n - m * sin(alpha), 0},
+    {l * (1 - cos(alpha)) * m - n * sin(alpha), pow(m, 2) + (1 - pow(m, 2)) * cos(alpha), m * (1 - cos(alpha)) * n + l * sin(alpha), 0},
+    {l * (1 - cos(alpha)) * n + m * sin(alpha), m * (1 - cos(alpha)) * n - l * sin(alpha), pow(n, 2) + (1 - pow(n, 2)) * cos(alpha), 0},
+    {0, 0, 0, 1}
+    };
+}
+
+bool isAxo = false;
+bool isPerspec = false;
+
+std::vector<std::vector<double>> create_axo_matrix(double psi, double phi) {
+    double sin_psi = std::sin(psi);
+    double cos_psi = std::cos(psi);
+    double sin_phi = std::sin(phi);
+    double cos_phi = std::cos(phi);
+
+    std::vector<std::vector<double>> axo_matrix = {
+        {cos_psi, sin_phi * sin_psi, 0, 0},
+        {0, cos_phi, 0, 0},
+        {sin_psi, -sin_phi * cos_psi, 0, 0},
+        {0, 0, 0, 1}
+    };
+
+    axo_matrix[3][0] += view_matr[3][0];
+    axo_matrix[3][1] += view_matr[3][1];
+
+    return axo_matrix;
+}
+
+std::vector<std::vector<double>> create_perspective_matrix(double c) {
+    std::vector<std::vector<double>> perspec_matrix = {
+        { 1, 0, 0, 0 },
+        { 0, 1, 0, 0 },
+        { 0, 0, 1, -1 / c },
+        { 0, 0, 0, 1}
+    };
+
+    perspec_matrix[3][0] += view_matr[3][0];
+    perspec_matrix[3][1] += view_matr[3][1];
+
+    return perspec_matrix;
+}
+
 
 void draw_UI() {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -439,18 +514,165 @@ void draw_UI() {
     ImGui::SetNextItemWidth(100);
     ImGui::SetCursorPos(ImVec2(925, 27));
     ImGui::RadioButton("Oyz", &refl_index, 0);
-    ImGui::SetCursorPos(ImVec2(975, 27));
+    ImGui::SetCursorPos(ImVec2(925, 50));
     ImGui::RadioButton("Oxz", &refl_index, 1);
-    ImGui::SetCursorPos(ImVec2(1025, 27));
+    ImGui::SetCursorPos(ImVec2(925, 73));
     ImGui::RadioButton("Oxy", &refl_index, 2);
-    ImGui::SetCursorPos(ImVec2(1080, 27));
+    ImGui::SetCursorPos(ImVec2(980, 27));
     if (ImGui::Button("Reflect", ImVec2(100, 50))) {
         scalin_matr[0][0] = refl_index == 0 ? -1 : 1;
         scalin_matr[1][1] = refl_index == 1 ? -1 : 1;
         scalin_matr[2][2] = refl_index == 2 ? -1 : 1;
         pol.affine_transformation(scalin_matr, view_matr);
     }
-   
+
+    static float alphal = 0;
+    static double tetal = 0;
+    static float p1x = 0;
+    static float p1y = -500;
+    static float p1z = 0;
+    static float p2x = 100;
+    static float p2y = 500;
+    static float p2z = 0;
+
+    ImGui::SetCursorPos(ImVec2(1100, 27));
+    ImGui::SetNextItemWidth(80);
+    if (ImGui::InputFloat("p1x", &p1x))
+    {
+        tetal = -alphal * (M_PI / 180.0);
+        change_rotate_around_line(tetal, { p1x, p1y, p1z }, { p2x, p2y, p2z });
+    }
+    ImGui::SetNextItemWidth(80);
+    ImGui::SetCursorPos(ImVec2(1100, 50));
+    if (ImGui::InputFloat("p1y", &p1y))
+    {
+        tetal = -alphal * (M_PI / 180.0);
+        change_rotate_around_line(tetal, { p1x, p1y, p1z }, { p2x, p2y, p2z });
+    }
+    ImGui::SetNextItemWidth(80);
+    ImGui::SetCursorPos(ImVec2(1100, 73));
+    if (ImGui::InputFloat("p1z", &p1z))
+    {
+        tetal = -alphal * (M_PI / 180.0);
+        change_rotate_around_line(tetal, { p1x, p1y, p1z }, { p2x, p2y, p2z });
+    }
+
+    ImGui::SetCursorPos(ImVec2(1210, 27));
+    ImGui::SetNextItemWidth(80);
+    if (ImGui::InputFloat("p2x", &p2x))
+    {
+        tetal = -alphal * (M_PI / 180.0);
+        change_rotate_around_line(tetal, { p1x, p1y, p1z }, { p2x, p2y, p2z });
+    }
+    ImGui::SetNextItemWidth(80);
+    ImGui::SetCursorPos(ImVec2(1210, 50));
+    if (ImGui::InputFloat("p2y", &p2y))
+    {
+        tetal = -alphal * (M_PI / 180.0);
+        change_rotate_around_line(tetal, { p1x, p1y, p1z }, { p2x, p2y, p2z });
+    }
+    ImGui::SetNextItemWidth(80);
+    ImGui::SetCursorPos(ImVec2(1210, 73));
+    if (ImGui::InputFloat("p2z", &p2z))
+    {
+        tetal = -alphal * (M_PI / 180.0);
+        change_rotate_around_line(tetal, { p1x, p1y, p1z }, { p2x, p2y, p2z });
+    }
+
+    ImGui::SetCursorPos(ImVec2(1320, 27));
+    if (ImGui::Button("DrawLine", ImVec2(100, 50))) {
+        isDrawingLine = !isDrawingLine;
+    }
+
+    if (isDrawingLine)
+    {
+        DrawLineWu({ base_view_matr[3][0] + p1x, base_view_matr[3][1] + p1y, p1z }, { base_view_matr[3][0] + p2x, base_view_matr[3][1] + p2y, p2z }, ImVec4(1.0, 0.0, 0.0, 1.0));
+    }
+
+    ImGui::SetCursorPos(ImVec2(1430, 27));
+    ImGui::SetNextItemWidth(80);
+    if (ImGui::InputFloat("la", &alphal)) {
+        tetal = -alphal * (M_PI / 180.0);
+        change_rotate_around_line(tetal, { p1x, p1y, p1z }, { p2x, p2y, p2z });
+    }
+
+    ImGui::SetCursorPos(ImVec2(1540, 27));
+    if (ImGui::Button("RotateAround", ImVec2(100, 50))) {
+        auto m = general_transformation({ p1x, p1y, p1z }, rotate_matr_line);
+        pol.affine_transformation(m, view_matr);
+    }
+
+    static float c = viewport->Size.x;
+    auto perspective_matrix = create_perspective_matrix(c);
+    ImGui::SetCursorPos(ImVec2(1660, 50));
+    ImGui::SetNextItemWidth(80);
+    if (ImGui::InputFloat("c", &c)) {
+        if (isPerspec)
+        {
+            perspective_matrix = create_perspective_matrix(c);
+            view_matr = perspective_matrix;
+            pol.apply_view_matr(view_matr);
+        }
+    }
+
+    ImGui::SetCursorPos(ImVec2(1660, 27));
+    if (ImGui::Button("Perspective")) {
+        if (!isPerspec) {
+            perspective_matrix = create_perspective_matrix(c);
+            view_matr = perspective_matrix;
+            pol.apply_view_matr(view_matr);
+            isPerspec = true;
+        }
+        else {
+            view_matr = base_view_matr;
+            pol.apply_view_matr(base_view_matr);
+            isPerspec = false;
+        }
+    }
+
+    static int psig = 0;
+    static int phig = 0;
+    static float psi = 0;
+    static float phi = 0;
+    auto axo_matrix = create_axo_matrix(psi, phi);
+    ImGui::SetCursorPos(ImVec2(1770, 50));
+    ImGui::SetNextItemWidth(80);
+    if (ImGui::InputInt("psi", &psig)) {
+        psi = psig * M_PI / 180;
+        axo_matrix = create_axo_matrix(psi, phi);
+        if (isAxo) {
+            view_matr = axo_matrix;
+            pol.apply_view_matr(view_matr);
+        }
+    }
+
+    ImGui::SetCursorPos(ImVec2(1770, 73));
+    ImGui::SetNextItemWidth(80);
+    if (ImGui::InputInt("phi", &phig)) {
+        phi = phig * M_PI / 180;
+        axo_matrix = create_axo_matrix(psi, phi);
+        if (isAxo) {
+            view_matr = axo_matrix;
+            pol.apply_view_matr(view_matr);
+        }
+    }
+
+    ImGui::SetCursorPos(ImVec2(1770, 27));
+    ImGui::SetNextItemWidth(80);
+    if (ImGui::Button("Axonometric")) {
+        if (!isAxo) {
+            axo_matrix = create_axo_matrix(psi, phi);
+            view_matr = axo_matrix;
+            pol.apply_view_matr(view_matr);
+            isAxo = true;
+        }
+        else {
+            view_matr = base_view_matr;
+            pol.apply_view_matr(base_view_matr);
+            isAxo = false;
+        }
+    }
+
     ImGui::End();
 }
 
@@ -458,13 +680,12 @@ int main() {
     if (!glfwInit()) return -1;
 
     glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
-    GLFWwindow* window = glfwCreateWindow(1500, 1000, "Task 2", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(1900, 1000, "3D", NULL, NULL);
     if (!window) {
         glfwTerminate();
         return -1;
     }
     glfwMakeContextCurrent(window);
-    //gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
     glewInit();
     glfwSwapInterval(1);
 
