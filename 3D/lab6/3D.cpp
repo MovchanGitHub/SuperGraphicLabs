@@ -98,6 +98,17 @@ void DrawLineWu(point p0, point p1, ImColor c) {
     }
 }
 
+std::vector<std::vector<double>> matr_mult(
+    std::vector<std::vector<double>>& m1,
+    std::vector<std::vector<double>>& m2) {
+    std::vector<std::vector<double>> res(4, std::vector<double>(4));
+    for (int i = 0; i < 4; ++i)
+        for (int j = 0; j < 4; ++j)
+            for (int k = 0; k < 4; ++k)
+                res[i][j] += m1[i][k] * m2[k][j];
+    return res;
+}
+
 class polyhedron {
     std::vector<point> vertices;
     std::vector<point> view_vertices;
@@ -145,10 +156,11 @@ public:
             it->affine_transformation(view_m);
     }
 
-    void affine_transformation(std::vector<std::vector<double>>& m, std::vector<std::vector<double>>& view) {
+    void affine_transformation(std::vector<std::vector<double>>& m, std::vector<std::vector<double>>& projection, std::vector<std::vector<double>>& view) {
         for (auto it = vertices.begin(); it != vertices.end(); ++it)
             it->affine_transformation(m);
-        this->apply_view_matr(view);
+        auto proj_view = matr_mult(projection, view);
+        this->apply_view_matr(proj_view);
     }
 
     void draw() const {
@@ -189,26 +201,17 @@ std::vector<std::vector<double>> offset_matr(4, std::vector<double>(4));
 std::vector<std::vector<double>> rotate_matr(4, std::vector<double>(4));
 std::vector<std::vector<double>> scalin_matr(4, std::vector<double>(4));
 std::vector<std::vector<double>> view_matr(4, std::vector<double>(4));
-std::vector<std::vector<double>> base_view_matr(4, std::vector<double>(4));
+std::vector<std::vector<double>> projection_matr(4, std::vector<double>(4));
+std::vector<std::vector<double>> base_proj_matr(4, std::vector<double>(4));
 
 void initialize_matrixes() {
     offset_matr[0][0] = offset_matr[1][1] = offset_matr[2][2] = offset_matr[3][3] = 1;
     scalin_matr[0][0] = scalin_matr[1][1] = scalin_matr[2][2] = scalin_matr[3][3] = 1;
     view_matr[0][0] = view_matr[1][1] = view_matr[2][2] = view_matr[3][3] = 1;
+    projection_matr[0][0] = projection_matr[1][1] = projection_matr[2][2] = projection_matr[3][3] = 1;
+    base_proj_matr = projection_matr;
     view_matr[3][0] = 750;
     view_matr[3][1] = 550;
-    base_view_matr = view_matr;
-}
-
-std::vector<std::vector<double>> matr_mult(
-    std::vector<std::vector<double>>& m1,
-    std::vector<std::vector<double>>& m2) {
-    std::vector<std::vector<double>> res(4, std::vector<double>(4));
-    for (int i = 0; i < 4; ++i)
-        for (int j = 0; j < 4; ++j)
-            for (int k = 0; k < 4; ++k)
-                res[i][j] += m1[i][k] * m2[k][j];
-    return res;
 }
 
 std::vector<std::vector<double>> general_transformation(point p, std::vector<std::vector<double>> matr) {
@@ -391,9 +394,6 @@ std::vector<std::vector<double>> create_axo_matrix(double psi, double phi) {
         {0, 0, 0, 1}
     };
 
-    axo_matrix[3][0] += view_matr[3][0];
-    axo_matrix[3][1] += view_matr[3][1];
-
     return axo_matrix;
 }
 
@@ -404,9 +404,6 @@ std::vector<std::vector<double>> create_perspective_matrix(double c) {
         { 0, 0, 1, -1 / c },
         { 0, 0, 0, 1}
     };
-
-    perspec_matrix[3][0] += view_matr[3][0];
-    perspec_matrix[3][1] += view_matr[3][1];
 
     return perspec_matrix;
 }
@@ -446,7 +443,7 @@ void draw_UI() {
         offset_matr[3][2] = -dz;
     ImGui::SetCursorPos(ImVec2(250, 27));
     if (ImGui::Button("Shift", ImVec2(100, 50))) {
-        pol.affine_transformation(offset_matr, view_matr);
+        pol.affine_transformation(offset_matr, projection_matr, view_matr);
     }
 
     ImGui::SetNextItemWidth(100);
@@ -479,7 +476,7 @@ void draw_UI() {
         if (by_center_rot)
             p = pol.centroid();
         auto m = general_transformation(p, rotate_matr);
-        pol.affine_transformation(m, view_matr);
+        pol.affine_transformation(m, projection_matr, view_matr);
     }
 
     ImGui::SetCursorPos(ImVec2(590, 27));
@@ -504,10 +501,10 @@ void draw_UI() {
         scalin_matr[2][2] = kz;
         if (by_center_sc) {
             auto m = general_transformation(pol.centroid(), scalin_matr);
-            pol.affine_transformation(m, view_matr);
+            pol.affine_transformation(m, projection_matr, view_matr);
         }
         else
-            pol.affine_transformation(scalin_matr, view_matr);
+            pol.affine_transformation(scalin_matr, projection_matr, view_matr);
     }
 
     static int refl_index = -1;
@@ -523,7 +520,7 @@ void draw_UI() {
         scalin_matr[0][0] = refl_index == 0 ? -1 : 1;
         scalin_matr[1][1] = refl_index == 1 ? -1 : 1;
         scalin_matr[2][2] = refl_index == 2 ? -1 : 1;
-        pol.affine_transformation(scalin_matr, view_matr);
+        pol.affine_transformation(scalin_matr, projection_matr, view_matr);
     }
 
     static float alphal = 0;
@@ -586,7 +583,7 @@ void draw_UI() {
 
     if (isDrawingLine)
     {
-        DrawLineWu({ base_view_matr[3][0] + p1x, base_view_matr[3][1] + p1y, p1z }, { base_view_matr[3][0] + p2x, base_view_matr[3][1] + p2y, p2z }, ImVec4(1.0, 0.0, 0.0, 1.0));
+        DrawLineWu({ view_matr[3][0] + p1x, view_matr[3][1] + p1y, p1z }, { view_matr[3][0] + p2x, view_matr[3][1] + p2y, p2z }, ImVec4(1.0, 0.0, 0.0, 1.0));
     }
 
     ImGui::SetCursorPos(ImVec2(1430, 27));
@@ -599,7 +596,7 @@ void draw_UI() {
     ImGui::SetCursorPos(ImVec2(1540, 27));
     if (ImGui::Button("RotateAround", ImVec2(100, 50))) {
         auto m = general_transformation({ p1x, p1y, p1z }, rotate_matr_line);
-        pol.affine_transformation(m, view_matr);
+        pol.affine_transformation(m, projection_matr, view_matr);
     }
 
     static float c = viewport->Size.x;
@@ -610,8 +607,9 @@ void draw_UI() {
         if (isPerspec)
         {
             perspective_matrix = create_perspective_matrix(c);
-            view_matr = perspective_matrix;
-            pol.apply_view_matr(view_matr);
+            projection_matr = perspective_matrix;
+            auto res_matr = matr_mult(projection_matr, view_matr);
+            pol.apply_view_matr(res_matr);
         }
     }
 
@@ -619,13 +617,14 @@ void draw_UI() {
     if (ImGui::Button("Perspective")) {
         if (!isPerspec) {
             perspective_matrix = create_perspective_matrix(c);
-            view_matr = perspective_matrix;
-            pol.apply_view_matr(view_matr);
+            projection_matr = perspective_matrix;
+            auto res_matr = matr_mult(projection_matr, view_matr);
+            pol.apply_view_matr(res_matr);
             isPerspec = true;
         }
         else {
-            view_matr = base_view_matr;
-            pol.apply_view_matr(base_view_matr);
+            projection_matr = base_proj_matr;
+            pol.apply_view_matr(view_matr);
             isPerspec = false;
         }
     }
@@ -641,8 +640,9 @@ void draw_UI() {
         psi = psig * M_PI / 180;
         axo_matrix = create_axo_matrix(psi, phi);
         if (isAxo) {
-            view_matr = axo_matrix;
-            pol.apply_view_matr(view_matr);
+            projection_matr = axo_matrix;
+            auto res_matr = matr_mult(projection_matr, view_matr);
+            pol.apply_view_matr(res_matr);
         }
     }
 
@@ -652,8 +652,9 @@ void draw_UI() {
         phi = phig * M_PI / 180;
         axo_matrix = create_axo_matrix(psi, phi);
         if (isAxo) {
-            view_matr = axo_matrix;
-            pol.apply_view_matr(view_matr);
+            projection_matr = axo_matrix;
+            auto res_matr = matr_mult(projection_matr, view_matr);
+            pol.apply_view_matr(res_matr);
         }
     }
 
@@ -662,13 +663,14 @@ void draw_UI() {
     if (ImGui::Button("Axonometric")) {
         if (!isAxo) {
             axo_matrix = create_axo_matrix(psi, phi);
-            view_matr = axo_matrix;
-            pol.apply_view_matr(view_matr);
+            projection_matr = axo_matrix;
+            auto res_matr = matr_mult(projection_matr, view_matr);
+            pol.apply_view_matr(res_matr);
             isAxo = true;
         }
         else {
-            view_matr = base_view_matr;
-            pol.apply_view_matr(base_view_matr);
+            projection_matr = base_proj_matr;
+            pol.apply_view_matr(view_matr);
             isAxo = false;
         }
     }
