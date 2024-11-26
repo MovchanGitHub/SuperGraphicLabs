@@ -5,17 +5,16 @@
 #include <SFML/Graphics.hpp>
 #include <GL/glew.h>
 #include <GL/gl.h>
-#include <random>
 #include <iostream>
-
+#include <random>
 
 enum class Polygon { TRIANGLE, SQUARE, FAN, PENTAGON };
-enum class Mode { CONST_COLOR, UNIFORM_COLOR, GRADIENT }; 
+enum class Mode { CONST_COLOR, UNIFORM_COLOR, GRADIENT };
 
 // Здесь выбор, что рисуется
-constexpr Polygon POLYGON_TO_DRAW = Polygon::TRIANGLE;
-constexpr GLuint FAN_VERTICES = 12; // > 3
-constexpr Mode DRAW_MODE = Mode::GRADIENT;
+constexpr Polygon POLYGON_TO_DRAW = Polygon::PENTAGON;
+constexpr GLuint FAN_VERTICES = 10; // > 2
+constexpr Mode DRAW_MODE = Mode::CONST_COLOR;
 
 GLfloat user_color[4] = { 0.9f, 0.0f, 0.25f, 1.0f };
 
@@ -178,7 +177,7 @@ void InitVBO() {
 	// Передаем вершины в буфер
 	if constexpr (POLYGON_TO_DRAW == Polygon::TRIANGLE) {
 		std::vector<Color> vert_colors = gen_random_colors(3);
-		Vertex triangle[3] = { { -1.0f, -1.0f, vert_colors[0] }, {0.0f, 1.0f, vert_colors[1] }, {1.0f, -1.0f, vert_colors[2] }};
+		Vertex triangle[3] = { { -1.0f, -1.0f, vert_colors[0] }, {0.0f, 1.0f, vert_colors[1] }, {1.0f, -1.0f, vert_colors[2] } };
 		glBufferData(GL_ARRAY_BUFFER, sizeof(triangle), triangle, GL_STATIC_DRAW);
 	}
 	else if constexpr (POLYGON_TO_DRAW == Polygon::SQUARE) {
@@ -187,13 +186,14 @@ void InitVBO() {
 		glBufferData(GL_ARRAY_BUFFER, sizeof(square), square, GL_STATIC_DRAW);
 	}
 	else if constexpr (POLYGON_TO_DRAW == Polygon::FAN) {
+		static_assert(FAN_VERTICES > 2, "FAN_VERTICES should be greater than 2.");
 		std::vector<Color> vert_colors = gen_random_colors(FAN_VERTICES);
 		Vertex fan[FAN_VERTICES];
 		fan[0].x = 0;
 		fan[0].y = -0.5;
 		fan[0].c = vert_colors[0];
-		GLdouble alpha = 0;
-		constexpr GLdouble delta = M_PI / (FAN_VERTICES - 2);
+		GLdouble alpha = M_PI / 18;
+		constexpr GLdouble delta = 8 * M_PI / 9 / (FAN_VERTICES - 2);
 		for (GLuint i = 1; i < FAN_VERTICES; ++i) {
 			fan[i].x = std::cos(alpha);
 			fan[i].y = std::sin(alpha) - 0.5;
@@ -229,11 +229,11 @@ void Init() {
 
 void Draw() {
 	glUseProgram(Program); // Устанавливаем шейдерную программу текущей
-	
+
 	if constexpr (DRAW_MODE == Mode::UNIFORM_COLOR) {
 		glUniform4fv(glGetUniformLocation(Program, "user_color"), 1, user_color); // Передаем в шейдер значение цвета через uniform-переменную
 	}
-	
+
 	//glEnableVertexAttribArray(Attrib_vertex); // Включаем массив атрибутов
 	glBindBuffer(GL_ARRAY_BUFFER, VBO); // Подключаем VBO
 	// сообщаем OpenGL как он должен интерпретировать вершинные данные.
