@@ -261,6 +261,7 @@ std::vector<std::vector<double>> matr_mult(
 class polyhedron {
 	std::vector<point> vertices;
 	std::vector<point> view_vertices;
+	bool has_been_triangulated = 0;
 
 	struct polygon {
 		std::list<point*> vertices;
@@ -394,6 +395,7 @@ public:
 		vertices.clear();
 		view_vertices.clear();
 		normals_for_faces.clear();
+		has_been_triangulated = 0;
 	}
 
 	void save_to_obj(const std::string& file_name) {
@@ -511,13 +513,15 @@ public:
 			}
 		}
 		faces = triangle_faces;
+		has_been_triangulated = 1;
 	}
 
 	void calc_face_normals() {
 		if (faces.size() == 0)
 			return;
 		
-		triangulate_faces();
+		if (!has_been_triangulated)
+			triangulate_faces();
 		for (int i = 0; i < faces.size(); ++i) {
 			point* vert0 = *faces[i].vertices.begin();
 			point* vert1 = *std::next(faces[i].vertices.begin());
