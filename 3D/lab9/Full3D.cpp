@@ -6,7 +6,6 @@
 #include <fstream>
 #include <string>
 #include <sstream>
-#include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
 #include <imgui.h>
@@ -35,10 +34,10 @@ public:
     double& y;
     double& z;
     double& w;
-    point(double x = 0, double y = 0, double z = 0, double w = 1): 
+    point(double x = 0, double y = 0, double z = 0, double w = 1):
         coords{ x, y, z, w }, x(coords[0]), y(coords[1]), z(coords[2]), w(coords[3]) {}
 
-    point(const point& p): 
+    point(const point& p):
         coords(p.coords), x(coords[0]), y(coords[1]), z(coords[2]), w(coords[3]) {}
 
     point& operator=(const point& p) {
@@ -54,6 +53,13 @@ public:
         return point(x * scalar, y * scalar, z * scalar);
     }
 
+    point& operator*=(double scalar) {
+        x *= scalar;
+        y *= scalar;
+        z *= scalar;
+        return *this;
+    }
+
     void normalize() {
         if (w == 0) return;
         x /= w;
@@ -62,13 +68,14 @@ public:
         w = 1;
     }
 
-    void affine_transformation(std::vector<std::vector<double>>& m) {
+    void affine_transformation(std::vector<std::vector<double>>& m, bool is_normal = false) {
         std::vector<double> new_coor(4);
         for (int j = 0; j < 4; ++j)
             for (int k = 0; k < 4; ++k)
                 new_coor[j] += coords[k] * m[k][j];
         coords = new_coor;
-        normalize();
+        if (!is_normal)
+            normalize();
     }
 };
 
@@ -173,7 +180,7 @@ void DrawScreen() {
             int index = x * HEIGHTSZ + y;
             if (redraw[index]) {
                 ImGui::GetForegroundDrawList()->
-                    AddRectFilled(ImVec2(x , y + 100), ImVec2(x + 1, y + 100 + 1), screen[index]);
+                    AddRectFilled(ImVec2(x, y + 100), ImVec2(x + 1, y + 100 + 1), screen[index]);
                 redraw[index] = false;
             }
         }
@@ -469,60 +476,11 @@ std::vector<std::vector<double>> matr_mult(
     return res;
 }
 
-double determinant4x4(const std::vector<std::vector<double>>& matrix) {
-    return
-        matrix[0][0] * (
-            matrix[1][1] * (matrix[2][2] * matrix[3][3] - matrix[2][3] * matrix[3][2]) -
-            matrix[1][2] * (matrix[2][1] * matrix[3][3] - matrix[2][3] * matrix[3][1]) +
-            matrix[1][3] * (matrix[2][1] * matrix[3][2] - matrix[2][2] * matrix[3][1])
-            ) -
-        matrix[0][1] * (
-            matrix[1][0] * (matrix[2][2] * matrix[3][3] - matrix[2][3] * matrix[3][2]) -
-            matrix[1][2] * (matrix[2][0] * matrix[3][3] - matrix[2][3] * matrix[3][0]) +
-            matrix[1][3] * (matrix[2][0] * matrix[3][2] - matrix[2][2] * matrix[3][0])
-            ) +
-        matrix[0][2] * (
-            matrix[1][0] * (matrix[2][1] * matrix[3][3] - matrix[2][3] * matrix[3][1]) -
-            matrix[1][1] * (matrix[2][0] * matrix[3][3] - matrix[2][3] * matrix[3][0]) +
-            matrix[1][3] * (matrix[2][0] * matrix[3][1] - matrix[2][1] * matrix[3][0])
-            ) -
-        matrix[0][3] * (
-            matrix[1][0] * (matrix[2][1] * matrix[3][2] - matrix[2][2] * matrix[3][1]) -
-            matrix[1][1] * (matrix[2][0] * matrix[3][2] - matrix[2][2] * matrix[3][0]) +
-            matrix[1][2] * (matrix[2][0] * matrix[3][1] - matrix[2][1] * matrix[3][0])
-            );
-}
-
 double determinant3x3(const std::vector<std::vector<double>>& matrix) {
     return
         matrix[0][0] * (matrix[1][1] * matrix[2][2] - matrix[1][2] * matrix[2][1]) -
         matrix[0][1] * (matrix[1][0] * matrix[2][2] - matrix[1][2] * matrix[2][0]) +
         matrix[0][2] * (matrix[1][0] * matrix[2][1] - matrix[1][1] * matrix[2][0]);
-}
-
-std::vector<std::vector<double>> cofactorMatrix(const std::vector<std::vector<double>>& matrix) {
-    int n = matrix.size();
-    std::vector<std::vector<double>> cofactors(n, std::vector<double>(n, 0.0));
-
-    for (int i = 0; i < n; ++i) {
-        for (int j = 0; j < n; ++j) {
-            std::vector<std::vector<double>> minorMatrix;
-            for (int x = 0; x < n; ++x) {
-                if (x == i) continue;
-                std::vector<double> row;
-                for (int y = 0; y < n; ++y) {
-                    if (y == j) continue;
-                    row.push_back(matrix[x][y]);
-                }
-                minorMatrix.push_back(row);
-            }
-
-            double minorDet = determinant3x3(minorMatrix);
-            cofactors[i][j] = ((i + j) % 2 == 0 ? 1 : -1) * minorDet;
-        }
-    }
-
-    return cofactors;
 }
 
 std::vector<std::vector<double>> transposeMatrix(const std::vector<std::vector<double>>& matrix) {
@@ -539,21 +497,45 @@ std::vector<std::vector<double>> transposeMatrix(const std::vector<std::vector<d
     return transposed;
 }
 
-std::vector<std::vector<double>> transposeInverseMatrix(const std::vector<std::vector<double>>& matrix) {
-    double det = determinant4x4(matrix);
+std::vector<std::vector<double>> inverse3x3(const std::vector<std::vector<double>>& matrix) {
+    double inv_det = 1.0 / determinant3x3(matrix);
+    std::vector<std::vector<double>> inv_matrix(3, std::vector<double>(3, 0.0));
 
-    std::vector<std::vector<double>> cofactors = cofactorMatrix(matrix);
+    inv_matrix[0][0] = (matrix[1][1] * matrix[2][2] - matrix[1][2] * matrix[2][1]) * inv_det;
+    inv_matrix[0][1] = (matrix[0][2] * matrix[2][1] - matrix[0][1] * matrix[2][2]) * inv_det;
+    inv_matrix[0][2] = (matrix[0][1] * matrix[1][2] - matrix[0][2] * matrix[1][1]) * inv_det;
 
-    std::vector<std::vector<double>> adjugate = transposeMatrix(cofactors);
+    inv_matrix[1][0] = (matrix[1][2] * matrix[2][0] - matrix[1][0] * matrix[2][2]) * inv_det;
+    inv_matrix[1][1] = (matrix[0][0] * matrix[2][2] - matrix[0][2] * matrix[2][0]) * inv_det;
+    inv_matrix[1][2] = (matrix[0][2] * matrix[1][0] - matrix[0][0] * matrix[1][2]) * inv_det;
 
-    std::vector<std::vector<double>> result(4, std::vector<double>(4, 0.0));
+    inv_matrix[2][0] = (matrix[1][0] * matrix[2][1] - matrix[1][1] * matrix[2][0]) * inv_det;
+    inv_matrix[2][1] = (matrix[0][1] * matrix[2][0] - matrix[0][0] * matrix[2][1]) * inv_det;
+    inv_matrix[2][2] = (matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0]) * inv_det;
+
+    return inv_matrix;
+}
+
+std::vector<std::vector<double>> transposedInverseMatrix(
+    const std::vector<std::vector<double>>& matrix) {
+    auto inv_matrix = inverse3x3({
+        {matrix[0][0], matrix[0][1], matrix[0][2]},
+        {matrix[1][0], matrix[1][1], matrix[1][2]},
+        {matrix[2][0], matrix[2][1], matrix[2][2]}
+        });
+    inv_matrix = transposeMatrix(inv_matrix);
+
+    std::vector<std::vector<double>> norm_matrix(4, std::vector<double>(4, 0.0));
     for (int i = 0; i < 4; ++i) {
-        for (int j = 0; j < 4; ++j) {
-            result[i][j] = adjugate[i][j] / det;
-        }
+        for (int j = 0; j < 4; ++j)
+            norm_matrix[i][j] = (i == j) ? 1.0f : 0.0f;
+    }
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j)
+            norm_matrix[i][j] = inv_matrix[i][j];
     }
 
-    return result;
+    return norm_matrix;
 }
 
 point light_pos = { 0, 0, 1 };
@@ -598,6 +580,8 @@ class polyhedron {
     };
 
 public:
+    ImColor color = { 255, 255, 255 };
+
     polyhedron() {}
 
     void apply_view_matr(std::vector<std::vector<double>>& view_m) {
@@ -612,11 +596,10 @@ public:
         , std::vector<std::vector<double>>& view) {
         for (auto& vertex : vertices)
             vertex.affine_transformation(m);
-        std::vector<std::vector<double>> normal_mat =
-            transposeInverseMatrix(m);
+        std::vector<std::vector<double>> normal_mat = transposedInverseMatrix(m);
         for (auto& vert_normal : vert_normals) {
-            vert_normal.w = 0.1;
-            vert_normal.affine_transformation(normal_mat);
+            vert_normal.affine_transformation(normal_mat, true);
+            vert_normal *= 10;
             normalize(vert_normal);
         }
         auto proj_view = matr_mult(projection, view);
@@ -645,7 +628,7 @@ public:
                     DrawLitTriangle(view_vertices[v[0]]
                         , view_vertices[v[1]]
                         , view_vertices[v[2]]
-                        , ImColor(255, 255, 255, 255)
+                        , color
                         , inten);
                 }
                 else {
@@ -666,8 +649,8 @@ public:
         text_vertices.emplace_back(x, y);
     }
 
-    uint add_point(const point& p) {
-        vertices.push_back(p);
+    uint add_point(double x, double y, double z) {
+        vertices.emplace_back(x, y, z);
         return vertices.size() - 1;
     }
 
@@ -783,7 +766,7 @@ public:
             if (type == "v") {
                 double x, y, z;
                 iss >> x >> y >> z;
-                add_point({ x, y, z });
+                add_point(x, y, z);
             }
             else if (type == "vn") {
                 float x, y, z;
@@ -803,12 +786,14 @@ public:
 
         do {
             std::istringstream iss(line);
-            iss.ignore();
+            std::string type;
+            iss >> type;
+            if (type != "f")
+                continue;
             int vertex_ind, norm_ind, tex_coord_ind;
             faces.push_back(polygon());
             while (iss >> vertex_ind) {
-                vertex_ind--;
-                tie_vertex_to_face(vertex_ind, face_index);
+                tie_vertex_to_face(--vertex_ind, face_index);
 
                 char ch1 = iss.peek();
                 if (ch1 == '/') {
@@ -946,14 +931,16 @@ void draw_UI() {
         ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoCollapse);
 
+    static char filename[128] = "";
     ImGui::SetCursorPos(ImVec2(5, 27));
-    if (ImGui::Button("Load teapot", ImVec2(100, 25))) {
-        pol.load_from_obj("utah_teapot_lowpoly.obj");
+    ImGui::SetNextItemWidth(100);
+    ImGui::InputText("", filename, IM_ARRAYSIZE(filename));
+    ImGui::SetCursorPos(ImVec2(5, 50));
+    if (ImGui::Button("Load model", ImVec2(100, 20))) {
+        pol.load_from_obj(filename);
     }
-
-    ImGui::SetCursorPos(ImVec2(5, 54));
-    ImGui::SetNextItemWidth(110);
-    if (ImGui::Button("Stack Pol", ImVec2(100, 25))) {
+    ImGui::SetCursorPos(ImVec2(5, 73));
+    if (ImGui::Button("Stack Pol", ImVec2(100, 20))) {
         save_pol_to_stack();
     }
 
@@ -1054,53 +1041,54 @@ void draw_UI() {
         pol.affine_transformation(scalin_matr, projection_matr, view_matr);
     }
 
+    static int light_pos_vals[3] = { 0, 0, 1 };
     ImGui::SetCursorPos(ImVec2(1120, 27));
     ImGui::SetNextItemWidth(100);
-    static int view_vec_vals[3] = { 0, 0, 1 };
-    if (ImGui::InputInt("view_x", &view_vec_vals[0])) {
-        base_view_vec.x = view_vec_vals[0];
-        if (isPerspec) {
-            cur_view_vec = base_view_vec;
-            cur_view_vec.affine_transformation(projection_matr);
-        }
-        else
-            cur_view_vec.x = base_view_vec.x;
+    if (ImGui::InputInt("light_x", &light_pos_vals[0])) {
+        light_pos.x = light_pos_vals[0];
     }
     ImGui::SetNextItemWidth(100);
     ImGui::SetCursorPos(ImVec2(1120, 52));
-    if (ImGui::InputInt("view_y", &view_vec_vals[1])) {
-        base_view_vec.y = view_vec_vals[1];
-        if (isPerspec) {
-            cur_view_vec = base_view_vec;
-            cur_view_vec.affine_transformation(projection_matr);
-        }
-        else
-            cur_view_vec.y = base_view_vec.y;
+    if (ImGui::InputInt("light_y", &light_pos_vals[1])) {
+        light_pos.y = light_pos_vals[1];
     }
     ImGui::SetCursorPos(ImVec2(1120, 77));
     ImGui::SetNextItemWidth(100);
-    if (ImGui::InputInt("view_z", &view_vec_vals[2])) {
-        base_view_vec.z = view_vec_vals[2];
-        if (isPerspec) {
-            cur_view_vec = base_view_vec;
-            cur_view_vec.affine_transformation(projection_matr);
-        }
-        else
-            cur_view_vec.z = base_view_vec.z;
+    if (ImGui::InputInt("light_z", &light_pos_vals[2])) {
+        light_pos.z = light_pos_vals[2];
     }
 
-    ImGui::SetCursorPos(ImVec2(1300, 27));
+    static int obj_color_vals[3] = { 255, 255, 255 };
+    ImGui::SetCursorPos(ImVec2(1290, 27));
+    ImGui::SetNextItemWidth(100);
+    if (ImGui::InputInt("obj_r", &obj_color_vals[0])) {
+        obj_color_vals[0] = std::max(0, std::min(255, obj_color_vals[0]));
+        pol.color.Value.x = obj_color_vals[0] / 255.0f;
+    }
+    ImGui::SetNextItemWidth(100);
+    ImGui::SetCursorPos(ImVec2(1290, 52));
+    if (ImGui::InputInt("obj_g", &obj_color_vals[1])) {
+        obj_color_vals[1] = std::max(0, std::min(255, obj_color_vals[1]));
+        pol.color.Value.y = obj_color_vals[1] / 255.0f;
+    }
+    ImGui::SetCursorPos(ImVec2(1290, 77));
+    ImGui::SetNextItemWidth(100);
+    if (ImGui::InputInt("obj_b", &obj_color_vals[2])) {
+        obj_color_vals[2] = std::max(0, std::min(255, obj_color_vals[2]));
+        pol.color.Value.z = obj_color_vals[2] / 255.0f;
+    }
+
+    ImGui::SetCursorPos(ImVec2(1460, 27));
     ImGui::SetNextItemWidth(100);
     if (ImGui::Checkbox("z_buffer", &use_z_buffer)) {
         if (!use_z_buffer)
             use_gouraud_shading = false;
     }
-    ImGui::SetCursorPos(ImVec2(1300, 54));
+    ImGui::SetCursorPos(ImVec2(1460, 52));
     if (ImGui::Checkbox("gouraud_shading", &use_gouraud_shading)) {
         if (use_gouraud_shading)
             use_z_buffer = true;
     }
-
 
     static float c = viewport->Size.x;
     auto perspective_matrix = create_perspective_matrix(c);
@@ -1241,11 +1229,6 @@ int main() {
     }
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
-
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-        std::cerr << "Failed to initialize GLAD" << std::endl;
-        return -1;
-    }
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
