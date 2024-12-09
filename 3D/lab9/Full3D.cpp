@@ -17,6 +17,7 @@
 
 bool use_z_buffer = true;
 bool use_gouraud_shading = true;
+bool use_phong_shading = false;
 
 const int WIDTHSZ = 1900;
 const int HEIGHTSZ = 1000;
@@ -540,6 +541,161 @@ std::vector<std::vector<double>> transposedInverseMatrix(
 
 point light_pos = { 0, 0, 1 };
 
+double dot_product(const point& v1, const point& v2) {
+    return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+}
+
+void normalize(point& vec) {
+    double len = std::sqrt(dot_product(vec, vec));
+    if (len > 0) {
+        vec.x /= len;
+        vec.y /= len;
+        vec.z /= len;
+    }
+}
+
+ImColor CalcPhongColor(const point& p, const point& normal, const ImColor& obj_color) {
+    point light_dir = light_pos - p;
+    normalize(light_dir);
+
+    double ambient = 0.1;
+    double diffuse = std::max(dot_product(normal, light_dir), 0.0);
+    double specular = 0.0;
+
+    point view_dir = { -p.x, -p.y, -p.z };
+    normalize(view_dir);
+
+    if (diffuse > 0) {
+        point reflect_dir = normal;
+        reflect_dir.x = 2 * dot_product(normal, light_dir) * normal.x - light_dir.x;
+        reflect_dir.y = 2 * dot_product(normal, light_dir) * normal.y - light_dir.y;
+        reflect_dir.z = 2 * dot_product(normal, light_dir) * normal.z - light_dir.z;
+        normalize(reflect_dir);
+        specular = std::pow(std::max(dot_product(view_dir, reflect_dir), 0.0), 16);
+    }
+
+    double intensity = ambient + 0.7 * diffuse + 0.2 * specular;
+    intensity = std::min(intensity, 1.0);
+
+    if (intensity > 0.8) 
+        intensity = 1.0;
+    else if (intensity > 0.4)
+        intensity = 0.6;
+    else
+        intensity = 0.2;
+    
+    int r = static_cast<int>(obj_color.Value.x * 255 * intensity);
+    int g = static_cast<int>(obj_color.Value.y * 255 * intensity);
+    int b = static_cast<int>(obj_color.Value.z * 255 * intensity);
+    return ImColor(r, g, b);
+}
+
+void DrawPhongLine(const point& p0, const point& p1, const point& n0, const point& n1, const ImColor& obj_color) {
+    int x0 = p0.x;
+    int y0 = p0.y;
+    int z0 = p0.z;
+    int x1 = p1.x;
+    int y1 = p1.y;
+    int z1 = p1.z;
+
+    int dx = abs(x1 - x0);
+    int dy = abs(y1 - y0);
+    int dz = abs(z1 - z0);
+
+    int xd = (x0 < x1) ? 1 : -1;
+    int yd = (y0 < y1) ? 1 : -1;
+    int zd = (z0 < z1) ? 1 : -1;
+
+    int maxDelta = std::max({ dx, dy, dz });
+
+    int errX = maxDelta / 2;
+    int errY = maxDelta / 2;
+    int errZ = maxDelta / 2;
+
+    for (int i = 0; i <= maxDelta; ++i) {
+        double t = InterpoalteFactor2(x0, p0, p1);
+        point interp_pos = InterpolateVertexY(t, p0, p1);
+        point normal = InterpolateVertexY(t, n0, n1);
+        normalize(normal);
+
+        ImColor color = CalcPhongColor(interp_pos, normal, obj_color);
+        set_pixel({ (double)x0, (double)y0, (double)z0 }, color);
+
+        errX -= dx;
+        errY -= dy;
+        errZ -= dz;
+
+        if (errX < 0) {
+            x0 += xd;
+            errX += maxDelta;
+        }
+        if (errY < 0) {
+            y0 += yd;
+            errY += maxDelta;
+        }
+        if (errZ < 0) {
+            z0 += zd;
+            errZ += maxDelta;
+        }
+    }
+}
+
+void DrawPhongTriangle(const point& p1, const point& p2, const point& p3,
+    const point& n1, const point& n2, const point& n3,
+    const ImColor& color) {
+    std::vector<point> vertices{ p1, p2, p3 };
+    std::vector<point> normals{ n1, n2, n3 };
+
+    if (vertices[1].y < vertices[0].y) {
+        std::swap(vertices[0], vertices[1]);
+        std::swap(normals[0], normals[1]);
+    }
+    if (vertices[2].y < vertices[0].y) {
+        std::swap(vertices[0], vertices[2]);
+        std::swap(normals[0], normals[2]);
+    }
+    if (vertices[2].y < vertices[1].y) {
+        std::swap(vertices[1], vertices[2]);
+        std::swap(normals[1], normals[2]);
+    }
+
+    const point& top = vertices[0];
+    const point& mid = vertices[1];
+    const point& bot = vertices[2];
+
+    const point& norm_top = normals[0];
+    const point& norm_mid = normals[1];
+    const point& norm_bot = normals[2];
+
+    for (double y = top.y; y < mid.y - 0.01; ++y) {
+        double left_factor = InterpoalteFactor(y, top, mid);
+        double right_factor = InterpoalteFactor(y, top, bot);
+
+        point left = InterpolateVertexY(left_factor, top, mid);
+        point right = InterpolateVertexY(right_factor, top, bot);
+
+        point norm_left = InterpolateVertexY(left_factor, norm_top, norm_mid);
+        point norm_right = InterpolateVertexY(right_factor, norm_top, norm_bot);
+
+        DrawPhongLine(left, right, norm_left, norm_right, color);
+    }
+
+    for (double y = mid.y; y < bot.y - 0.01; ++y) {
+        double left_factor = InterpoalteFactor(y, mid, bot);
+        double right_factor = InterpoalteFactor(y, top, bot);
+
+        point left = InterpolateVertexY(left_factor, mid, bot);
+        point right = InterpolateVertexY(right_factor, top, bot);
+
+        point norm_left = InterpolateVertexY(left_factor, norm_mid, norm_bot);
+        point norm_right = InterpolateVertexY(right_factor, norm_top, norm_bot);
+
+        DrawPhongLine(left, right, norm_left, norm_right, color);
+    }
+}
+
+
+
 class polyhedron {
     struct polygon;
     std::vector<polygon> faces;
@@ -622,6 +778,7 @@ public:
             if (dot_product(face.normal, cur_view_vec) <= 0) continue;
             auto& v = face.vert_indices;
             auto& t = face.text_indices;
+            auto& n = face.norm_indices;
             if (use_z_buffer) {
                 if (use_gouraud_shading) {
                     std::vector<double> inten = calc_intensity_lambert(face);
@@ -630,6 +787,11 @@ public:
                         , view_vertices[v[2]]
                         , color
                         , inten);
+                }
+                else if (use_phong_shading) {
+                    DrawPhongTriangle(view_vertices[v[0]], view_vertices[v[1]], view_vertices[v[2]],
+                        vert_normals[n[0]], vert_normals[n[1]], vert_normals[n[2]],
+                        color);
                 }
                 else {
                     DrawTriangle(
@@ -1086,8 +1248,17 @@ void draw_UI() {
     }
     ImGui::SetCursorPos(ImVec2(1460, 52));
     if (ImGui::Checkbox("gouraud_shading", &use_gouraud_shading)) {
-        if (use_gouraud_shading)
+        if (use_gouraud_shading) {
             use_z_buffer = true;
+            use_phong_shading = false;
+        }
+    }
+    ImGui::SetCursorPos(ImVec2(1460, 77));
+    if (ImGui::Checkbox("phong_shading", &use_phong_shading)) {
+        if (use_phong_shading) {
+            use_z_buffer = true;
+            use_gouraud_shading = false;
+        }
     }
 
     static float c = viewport->Size.x;
@@ -1258,6 +1429,10 @@ int main() {
 
         view_matr = create_camera_view();
         auto res = matr_mult(projection_matr, view_matr);
+        for (auto& p : pol_stack)
+        {
+            p.apply_view_matr(res);
+        }
         pol.apply_view_matr(res);
 
         draw_UI();
