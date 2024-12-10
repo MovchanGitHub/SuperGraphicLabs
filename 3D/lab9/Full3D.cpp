@@ -353,6 +353,10 @@ double InterpoalteFactor(double y, const point& p1, const point& p2) {
     return (abs(p2.y - p1.y) < 0.01) ? 0.0 : (y - p1.y) / (p2.y - p1.y);
 }
 
+double InterpoalteFactorX(double x, const point& p1, const point& p2) {
+    return (abs(p2.x - p1.x) < 0.01) ? 0.0 : (x - p1.x) / (p2.x - p1.x);
+}
+
 point InterpolateVertexY(double factor, const point& p1, const point& p2) {
     return { p1.x + factor * (p2.x - p1.x), p1.y + factor * (p2.y - p1.y), p1.z + factor * (p2.z - p1.z) };
 }
@@ -613,7 +617,7 @@ void DrawPhongLine(const point& p0, const point& p1, const point& n0, const poin
     int errZ = maxDelta / 2;
 
     for (int i = 0; i <= maxDelta; ++i) {
-        double t = InterpoalteFactor2(x0, p0, p1);
+        double t = InterpoalteFactorX(x0, p0, p1);
         point interp_pos = InterpolateVertexY(t, p0, p1);
         point normal = InterpolateVertexY(t, n0, n1);
         normalize(normal);
