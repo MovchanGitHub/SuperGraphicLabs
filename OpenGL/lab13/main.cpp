@@ -15,6 +15,13 @@ GLuint instanceVBO;
 const std::string model_path = "data/model.obj";
 const std::string texture_path = "data/model.png";
 
+glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+float yaw = -90.0f;
+float pitch = 0.0f;
+
+
 // Исходный код вершинного шейдера
 const char* VertexShaderSource = R"(
  #version 330 core
@@ -123,10 +130,17 @@ float angleY = 0.0f;
 
 void Draw() {
 	glUseProgram(Program); // Устанавливаем шейдерную программу текущей
+	glm::vec3 front;
+	front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+	front.y = sin(glm::radians(pitch));
+	front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+	cameraFront = glm::normalize(front);
+
+	glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+	glUniformMatrix4fv(glGetUniformLocation(Program, "view"), 1, GL_FALSE, glm::value_ptr(view));
+
 	glm::mat4 model = glm::rotate(glm::mat4(1.0f), angleX, glm::vec3(1.0f, 0.0f, 0.0f));
-	model = glm::translate(model, glm::vec3(0.0f, -0.7f, 0.0f));
 	model = glm::rotate(model, angleY, glm::vec3(0.0f, 1.0f, 0.0f));
-	model = glm::scale(model, glm::vec3(2.25f, 2.25f, 2.25f));
 	glUniformMatrix4fv(glGetUniformLocation(Program, "model"), 1, GL_FALSE, glm::value_ptr(model));
 	model0.display_model(Program);
 	glUseProgram(0); // Отключаем шейдерную программу
@@ -148,13 +162,21 @@ void Release() {
 }
 
 void HandleKeyboardInput() {
-	constexpr float rotationSpeed = 0.05f;
-	constexpr float mixSpeed = 0.01f;
+	constexpr float cameraSpeed = 0.05f; // Скорость перемещения
+	constexpr float rotationSpeed = 0.2f;
 
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) angleX -= rotationSpeed;
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) angleX += rotationSpeed;
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) angleY -= rotationSpeed;
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) angleY += rotationSpeed;
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) cameraPos += cameraSpeed * cameraFront;
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) cameraPos -= cameraSpeed * cameraFront;
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up)) pitch += rotationSpeed;
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down)) pitch -= rotationSpeed;
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) yaw -= rotationSpeed;
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) yaw += rotationSpeed;
+
+	if (pitch > 89.0f) pitch = 89.0f;
+	if (pitch < -89.0f) pitch = -89.0f;
 }
 
 int main() {
