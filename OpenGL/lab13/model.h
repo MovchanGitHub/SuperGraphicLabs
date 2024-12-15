@@ -10,17 +10,23 @@
 #include <sstream>
 #include <iostream>
 #include "glm/glm.hpp"
+#include <glm/gtc/matrix_transform.hpp>
+
+const int NUM_PLANETS = 9;
+const float ORBIT_RADIUS[] = { 0.0f, 3.0f, 5.0f, 7.0f, 10.0f, 15.0f, 20.0f, 25.0f, 30.0f };
+const float PLANET_SIZE[] = { 3.0f, 1.5f, 1.3f, 1.2f, 1.1f, 1.0f, 0.9f, 0.8f, 0.7f };
+// Вокруг центра
+const float ORBIT_SPEED[] = { 0.0f, 0.02f, 0.04f, 0.06f, 0.08f, 0.10f, 0.12f, 0.14f, 0.16f };
+// Вокруг своей оси
+const float ROTATION_SPEED[] = { 0.0f, 0.2f, 0.25f, 0.3f, 0.35f, 0.4f, 0.45f, 0.5f, 0.6f };
 
 struct Vertex {
 	glm::vec3 position;
 	glm::vec3 normal;
 	glm::vec2 tex_coords;
 
-	Vertex(float pos_x, float pos_y, float pos_z) {
-		position = glm::vec3(pos_x, pos_y, pos_z);
-		normal = {};
-		tex_coords = {};
-	}
+	Vertex(float pos_x, float pos_y, float pos_z):
+		position(glm::vec3(pos_x, pos_y, pos_z)) {}
 };
 
 struct Texture {
@@ -28,11 +34,40 @@ struct Texture {
 	sf::Texture texture;
 };
 
+glm::vec3 translations[NUM_PLANETS];
+
+inline void InitTranslations() {
+	for (int i = 0; i < NUM_PLANETS; ++i) {
+		translations[i] = glm::vec3(ORBIT_RADIUS[i], 0.0f, 0.0f);
+	}
+}
+
+inline void CalculateOrbitTransform(glm::mat4* orbit_transform) {
+	static float time = 0.0f;
+	time += 0.01f;
+
+	for (int i = 0; i < NUM_PLANETS; ++i) {
+		auto& curr = orbit_transform[i];
+		curr = glm::mat4(1.0f);
+
+		float angle = ORBIT_SPEED[i] * time;
+		translations[i] = glm::vec3(cos(angle) * ORBIT_RADIUS[i], 0.0f, sin(angle) * ORBIT_RADIUS[i]);
+
+		// перенос в центр координат
+		curr = glm::translate(curr, translations[i]);
+		// поворот вокруг своей оси
+		curr = glm::rotate(curr, time * ROTATION_SPEED[i], glm::vec3(0.0f, 1.0f, 0.0f));
+		// масштабирование
+		curr = glm::scale(curr, glm::vec3(PLANET_SIZE[i]));
+	}
+}
+
 class Mesh {
 	void setup_mesh() {
 		glGenVertexArrays(1, &VAO);
 		glGenBuffers(1, &VBO);
 		glGenBuffers(1, &EBO);
+		glGenBuffers(1, &instanceVBO);
 
 		glBindVertexArray(VAO);
 		glBindBuffer(GL_ARRAY_BUFFER, VBO);
@@ -46,6 +81,7 @@ class Mesh {
 		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
 		glEnableVertexAttribArray(2);
 		glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, tex_coords));
+
 		glBindVertexArray(0);
 	}
 
@@ -60,6 +96,7 @@ class Mesh {
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glDeleteBuffers(1, &VBO);
 		glDeleteBuffers(1, &EBO);
+		glDeleteBuffers(1, &instanceVBO);
 		glDeleteVertexArrays(1, &VAO);
 	}
 
@@ -67,20 +104,35 @@ public:
 	std::vector<Vertex> vertices;
 	std::vector<GLuint> indices;
 	Texture texture;
-	GLuint VAO, VBO, EBO;
+	GLuint VAO, VBO, EBO, instanceVBO;
 
 	Mesh() = default;
 
+	friend class ModelData;
 	friend class Model;
 
 	void display_mesh(GLuint shader_id) const {
+		static glm::mat4 orbit_transform[NUM_PLANETS];
 		if (texture.id != -1) {
 			glActiveTexture(GL_TEXTURE0);
 			glUniform1i(glGetUniformLocation(shader_id, "tex"), 0);
 			sf::Texture::bind(&texture.texture);
 		}
 		glBindVertexArray(VAO);
-		glDrawElements(GL_TRIANGLES, (GLuint)indices.size(), GL_UNSIGNED_INT, 0);
+
+		CalculateOrbitTransform(orbit_transform);
+		glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * NUM_PLANETS, orbit_transform, GL_STATIC_DRAW);
+
+		for (int i = 0; i < 4; i++) {
+			glEnableVertexAttribArray(3 + i);
+			glVertexAttribPointer(3 + i, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(sizeof(glm::vec4) * i));
+			glVertexAttribDivisor(3 + i, 1);
+		}
+
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+		glDrawElementsInstanced(GL_TRIANGLES, (GLuint)indices.size(), GL_UNSIGNED_INT, 0, NUM_PLANETS);
 		glBindVertexArray(0);
 		if (texture.id != -1)
 			sf::Texture::bind(NULL);
@@ -99,34 +151,14 @@ std::vector<std::string> split(const std::string& str, char sep = ' ') {
 	return res;
 }
 
-class Model
-{
-public:
+struct ModelData {
 	std::vector<Mesh> meshes;
-	std::string dir;
 
-	Model() = default;
-
-	Model(std::string const& file_path, std::string const& tex_path = "") {
-		load_model(file_path, tex_path);
-	}
-
-	void display_model(GLuint shader_id) {
-		for (const Mesh& mesh : meshes)
-			mesh.display_mesh(shader_id);
-	}
-
-	void release() {
-		for (Mesh& mesh : meshes)
-			mesh.release();
-	}
-
-private:
 	Vertex process_vertex(const std::string& vert, const std::vector<glm::vec3>& vert_positions,
 		const std::vector<glm::vec3>& vert_normals, const std::vector<glm::vec2>& vert_tex_coords) {
 		GLuint vertex_ind, norm_ind, tex_coord_ind;
 		std::istringstream iss(vert);
-		
+
 		iss >> vertex_ind;
 		Vertex res_vert(vert_positions[--vertex_ind].x,
 			vert_positions[vertex_ind].y, vert_positions[vertex_ind].z);
@@ -168,7 +200,7 @@ private:
 		std::vector<GLuint> indices;
 		Mesh cur_mesh;
 		std::string line;
-		
+
 		while (std::getline(file, line)) {
 			std::istringstream iss(line);
 			std::string type;
@@ -214,16 +246,41 @@ private:
 					indices.push_back(indices.size());
 				}
 			}
-		}		
+		}
 		file.close();
 
 		cur_mesh.indices = indices;
-		meshes.push_back(cur_mesh);		
+		meshes.push_back(cur_mesh);
 		for (Mesh& mesh : meshes) {
 			mesh.setup_mesh();
 			if (!tex_path.empty())
 				mesh.setup_texture(tex_path);
 		}
+	}
+
+	void release() {
+		for (Mesh& mesh : meshes)
+			mesh.release();
+	}
+};
+
+struct Model {
+	ModelData data;
+
+	Model() = default;
+
+	Model(std::string const& file_path, std::string const& tex_path) {
+		data.load_model(file_path, tex_path);
+	}
+
+	void display_model(GLuint shader_id) {
+		for (const Mesh& mesh : data.meshes)
+			mesh.display_mesh(shader_id);
+	}
+
+	void release() {
+		for (Mesh& mesh : data.meshes)
+			mesh.release();
 	}
 };
 #endif

@@ -1,5 +1,4 @@
-﻿#define _USE_MATH_DEFINES
-#include <cmath>
+﻿#include <cmath>
 #include <SFML/Window.hpp>
 #include <SFML/Graphics.hpp>
 #include <GL/glew.h>
@@ -10,8 +9,11 @@
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtc/type_ptr.hpp"
 
-GLfloat user_color[4] = { 0.9f, 0.0f, 0.25f, 1.0f };
 Model model0;
+GLuint instanceVBO;
+
+const std::string model_path = "data/model.obj";
+const std::string texture_path = "data/model.png";
 
 // Исходный код вершинного шейдера
 const char* VertexShaderSource = R"(
@@ -19,6 +21,8 @@ const char* VertexShaderSource = R"(
  layout (location = 0) in vec3 position;
  layout (location = 1) in vec3 normal;
  layout (location = 2) in vec2 tex_coord;
+ layout (location = 3) in mat4 orbit_transform;
+ // следующий будет location = 7
 
  out vec2 out_tex_coord; 
 
@@ -28,7 +32,7 @@ const char* VertexShaderSource = R"(
 
  void main() {
 	out_tex_coord = vec2(tex_coord.x, 1.0f - tex_coord.y);
-	gl_Position = projection * view * model * vec4(position, 1.0);
+	gl_Position = projection * view * model * orbit_transform * vec4(position, 1.0);
  }
 )";
 
@@ -39,7 +43,6 @@ const char* FragShaderSource_UniformColorInShader = R"(
 
  out vec4 color;
 
- uniform vec4 user_color;
  uniform sampler2D tex;
  
  void main() {
@@ -96,12 +99,15 @@ void InitShader() {
 	}
 }
 
+
+
 void Init() {
 	// Шейдеры
 	InitShader();
+	InitTranslations();
 	glEnable(GL_DEPTH_TEST);
 	glClearColor(0.5, 0.5, 0.5, 0.0);
-	model0 = Model("utah_teapot_lowpoly.obj", "tex.png");
+	model0 = Model(model_path, texture_path);
 	glm::mat4 model = glm::rotate(glm::mat4(1.0f), glm::radians(45.0f), glm::vec3(1.0f, 1.0f, 0.0f));
 	glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -5.0f));
 	glm::mat4 projection = glm::perspective(glm::radians(45.0f), 1.0f, 0.1f, 100.0f);
@@ -117,7 +123,6 @@ float angleY = 0.0f;
 
 void Draw() {
 	glUseProgram(Program); // Устанавливаем шейдерную программу текущей
-	glUniform4fv(glGetUniformLocation(Program, "user_color"), 1, user_color); // Передаем в шейдер значение цвета через uniform-переменную
 	glm::mat4 model = glm::rotate(glm::mat4(1.0f), angleX, glm::vec3(1.0f, 0.0f, 0.0f));
 	model = glm::translate(model, glm::vec3(0.0f, -0.7f, 0.0f));
 	model = glm::rotate(model, angleY, glm::vec3(0.0f, 1.0f, 0.0f));
@@ -156,13 +161,13 @@ int main() {
 	sf::Window window(sf::VideoMode(600, 600), "My OpenGL window", sf::Style::Default, sf::ContextSettings(24));
 	window.setVerticalSyncEnabled(true);
 	window.setActive(true);
-	glewInit();	
+	glewInit();
 	Init();
 	while (window.isOpen()) {
 		sf::Event event;
 		while (window.pollEvent(event)) {
 			if (event.type == sf::Event::Closed) { window.close(); }
-			else if (event.type == sf::Event::Resized) { glViewport(0, 0, event.size.width, event.size.height); }			
+			else if (event.type == sf::Event::Resized) { glViewport(0, 0, event.size.width, event.size.height); }
 		}
 		HandleKeyboardInput();
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
