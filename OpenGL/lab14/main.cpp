@@ -6,17 +6,21 @@
 #include <iostream>
 #include <random>
 #include "model.h"
+#include "shader.h"
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtc/type_ptr.hpp"
 
 Model model0;
 GLuint instanceVBO;
 
-const std::string model_path = "data/bus2.obj";
-const std::string texture_path = "data/bus2.png";
+const std::string model_path = "data/sphere.obj";
+const std::string texture_path = "data/tex.png";
 
-enum class light_kind {PointLightSource, Spotlight};
-constexpr light_kind LIGHT_KIND = light_kind::Spotlight;
+enum class light_kind {PointLightSource, Spotlight, DirLightSource};
+constexpr light_kind LIGHT_KIND = light_kind::PointLightSource;
+
+enum class shader_kind {Phong, OrenNayar};
+constexpr shader_kind SHADER_KIND = shader_kind::OrenNayar;
 
 glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
 glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
@@ -36,7 +40,7 @@ struct Light {
 };
 
 Light light = {
-	glm::vec4(0.0f, 10.0f, 0.0f, 1.0f),  // Позиция прожектора (например, на высоте 5, по оси Y)
+	glm::vec4(0.0f, 0.0f, -10.0f, 0.0f),  // Позиция прожектора (например, на высоте 5, по оси Y)
 	glm::vec3(0.0f, -1.0f, 0.0f),  // Направление светового луча вниз по оси Y
 	cos(glm::radians(20.0f)),  // Угол отсечения 30 градусов (косинус угла отсечения)
 	20.0f,  // Коэффициент экспоненциального затухания (можно регулировать для более мягкого или резкого падения света)
@@ -46,323 +50,25 @@ Light light = {
 	glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)  // Зеркальная составляющая (белый свет для отражений)
 };
 
-// рудимент 
-const char* VertexShaderSource = R"(
- #version 330 core
- layout (location = 0) in vec3 position;
- layout (location = 1) in vec3 normal;
- layout (location = 2) in vec2 tex_coord;
- layout (location = 3) in mat4 orbit_transform;
- // следующий будет location = 7
-
- out vec2 out_tex_coord; 
-
- uniform mat4 model;
- uniform mat4 view;
- uniform mat4 projection;
-
- void main() {
-	out_tex_coord = vec2(tex_coord.x, 1.0f - tex_coord.y);
-	gl_Position = projection * view * model * orbit_transform * vec4(position, 1.0);
- }
-)";
-
-// рудимент 
-const char* FragShaderSource_UniformColorInShader = R"(
- #version 330 core
- in vec2 out_tex_coord;
-
- out vec4 color;
-
- uniform sampler2D tex;
- 
- void main() {
-	color = texture(tex, out_tex_coord);
- }
-)";
-
-const char* PhongVertexShaderPointLight = R"(
-#version 330 core
-
-#define VERT_POSITION 0
-#define VERT_NORMAL 1
-#define VERT_TEXCOORD 2
-
-layout (location = VERT_POSITION) in vec3 position;
-layout (location = VERT_NORMAL) in vec3 normal;
-layout (location = VERT_TEXCOORD) in vec2 texcoord;
-
-uniform struct Transform {
-    mat4 model;
-    mat4 viewProjection;
-    mat3 normal;
-    vec3 viewPosition;
-} transform;
-
-uniform struct PointLight {
-    vec4 position;
-    vec4 ambient;
-    vec4 diffuse;
-    vec4 specular;
-    vec3 attenuation;
-} light;
-
-out Vertex {
-    vec2 texcoord;
-    vec3 normal;
-    vec3 lightDir;
-    vec3 viewDir;
-    float distance;
-} Vert;
-
-void main() {
-    vec4 vertex = transform.model * vec4(position, 1.0);
-    vec4 lightDir = light.position - vertex;
-    gl_Position = transform.viewProjection * vertex;
-    Vert.texcoord = vec2(texcoord.x, 1.0f - texcoord.y);
-    Vert.normal = transform.normal * normal;
-    Vert.lightDir = normalize(vec3(lightDir));
-    Vert.viewDir = normalize(transform.viewPosition - vec3(vertex));
-    Vert.distance = length(lightDir);
-}
-)";
-
-const char* PhongVertexShaderSpotlight = R"(
-#version 330 core
-
-#define VERT_POSITION 0
-#define VERT_NORMAL 1
-#define VERT_TEXCOORD 2
-
-layout (location = VERT_POSITION) in vec3 position;
-layout (location = VERT_NORMAL) in vec3 normal;
-layout (location = VERT_TEXCOORD) in vec2 texcoord;
-
-uniform struct Transform {
-    mat4 model;
-    mat4 viewProjection;
-    mat3 normal;
-    vec3 viewPosition;
-} transform;
-
-uniform struct SpotLight {
-    vec4 position;
-    vec4 ambient;
-    vec4 diffuse;
-    vec4 specular;
-    vec3 attenuation;
-    vec3 spotDirection;
-    float spotCosCutoff;
-    float spotExponent;
-} light;
-
-out Vertex {
-    vec2 texcoord;
-    vec3 normal;
-    vec3 lightDir;
-    vec3 viewDir;
-    float distance;
-} Vert;
-
-void main() {
-    vec4 vertex = transform.model * vec4(position, 1.0);
-    vec4 lightDir = light.position - vertex;
-    gl_Position = transform.viewProjection * vertex;
-    Vert.texcoord = vec2(texcoord.x, 1.0f - texcoord.y);
-    Vert.normal = transform.normal * normal;
-    Vert.lightDir = normalize(vec3(lightDir));
-    Vert.viewDir = normalize(transform.viewPosition - vec3(vertex));
-    Vert.distance = length(lightDir);
-}
-)";
-
-const char* PhongFragShaderPointLight = R"(
-#version 330 core
-
-#define FRAG_OUTPUT0 0
-
-layout (location = FRAG_OUTPUT0) out vec4 color;
-
-uniform struct PointLight {
-    vec4 position;
-    vec4 ambient;
-    vec4 diffuse;
-    vec4 specular;
-    vec3 attenuation;
-} light;
-
-uniform struct Material {
-    sampler2D texture;
-    vec4 ambient;
-    vec4 diffuse;
-    vec4 specular;
-    vec4 emission;
-    float shininess;
-} material;
-
-in Vertex {
-    vec2 texcoord;
-    vec3 normal;
-    vec3 lightDir;
-    vec3 viewDir;
-    float distance;
-} Vert;
-
-void main() {
-    vec3 normal = normalize(Vert.normal);
-    vec3 lightDir = normalize(Vert.lightDir);
-    vec3 viewDir = normalize(Vert.viewDir);
-
-    float attenuation = 1.0 / max(light.attenuation[0] + 
-        light.attenuation[1] * Vert.distance + 
-        light.attenuation[2] * Vert.distance * Vert.distance, 0.0001);
-
-    color = material.emission;
-    color += material.ambient * light.ambient * attenuation;
-
-    float Ndot = max(dot(normal, lightDir), 0.0);
-    color += material.diffuse * light.diffuse * Ndot * attenuation;
-
-    float RdotVpow = max(pow(dot(reflect(-lightDir, normal), viewDir), material.shininess), 0.0);
-    color += material.specular * light.specular * RdotVpow * attenuation;
-
-    color *= texture(material.texture, Vert.texcoord);
-}
-)";
-
-const char* PhongFragShaderSpotlight = R"(
-#version 330 core
-
-#define FRAG_OUTPUT0 0
-
-layout (location = FRAG_OUTPUT0) out vec4 color;
-
-uniform struct SpotLight {
-    vec4 position;
-    vec4 ambient;
-    vec4 diffuse;
-    vec4 specular;
-    vec3 attenuation;
-    vec3 spotDirection;
-    float spotCosCutoff;
-    float spotExponent;
-} light;
-
-uniform struct Material {
-    sampler2D texture;
-    vec4 ambient;
-    vec4 diffuse;
-    vec4 specular;
-    vec4 emission;
-    float shininess;
-} material;
-
-in Vertex {
-    vec2 texcoord;
-    vec3 normal;
-    vec3 lightDir;
-    vec3 viewDir;
-    float distance;
-} Vert;
-
-void main() {
-    vec3 normal = normalize(Vert.normal);
-    vec3 lightDir = normalize(Vert.lightDir);
-    vec3 viewDir = normalize(Vert.viewDir);
-
-    // Направление света от прожектора
-    vec3 spotDir = normalize(light.spotDirection);
-    // Угол между направлением прожектора и направлением к точке
-    float spotEffect = dot(spotDir, -lightDir);
-    // Ограничение зоны влияния прожектора
-    spotEffect = float(spotEffect > light.spotCosCutoff);
-    // Экспоненциальное затухание
-    spotEffect = max(pow(spotEffect, light.spotExponent), 0.0);
-
-    // Коэффициент затухания прожектора
-    float attenuation = spotEffect * (1.0 / max(light.attenuation[0] + 
-        light.attenuation[1] * Vert.distance + 
-        light.attenuation[2] * Vert.distance * Vert.distance, 0.0001));
-
-    color = material.emission;
-    color += material.ambient * light.ambient * attenuation;
-
-    float Ndot = max(dot(normal, lightDir), 0.0);
-    color += material.diffuse * light.diffuse * Ndot * attenuation;
-
-    float RdotVpow = max(pow(dot(reflect(-lightDir, normal), viewDir), material.shininess), 0.0);
-    color += material.specular * light.specular * RdotVpow * attenuation;
-
-    color *= texture(material.texture, Vert.texcoord);
-}
-)";
-
 // ID шейдерной программы
 GLuint Program;
 
-void ShaderLog(unsigned int shader) {
-	int infologLen = 0;
-	glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &infologLen);
-	if (infologLen > 1)
-	{
-		int charsWritten = 0;
-		std::vector<char> infoLog(infologLen);
-		glGetShaderInfoLog(shader, infologLen, &charsWritten, infoLog.data());
-		std::cout << "InfoLog: " << infoLog.data() << std::endl;
-	}
-}
-
-void ProgramLog(GLuint program) {
-	GLint infoLen;
-	glGetProgramiv(program, GL_INFO_LOG_LENGTH, &infoLen);
-	if (infoLen > 0) {
-		std::vector<char> infoLog(infoLen);
-		glGetProgramInfoLog(program, infoLen, nullptr, infoLog.data());
-		std::cout << "Program linking log:\n" << infoLog.data() << std::endl;
-	}
-}
-
-
 void InitShader() {
-	// Создаем вершинный шейдер
-	GLuint vShader = glCreateShader(GL_VERTEX_SHADER);
-	// Передаем исходный код
-	if constexpr (LIGHT_KIND == light_kind::PointLightSource)
-		glShaderSource(vShader, 1, &PhongVertexShaderPointLight, NULL);
-	if constexpr (LIGHT_KIND == light_kind::Spotlight)
-		glShaderSource(vShader, 1, &PhongVertexShaderSpotlight, NULL);
-	// Компилируем шейдер
-	glCompileShader(vShader);
-	std::cout << "vertex shader \n";
-	// Функция печати лога шейдера
-	ShaderLog(vShader);
-	// Создаем фрагментный шейдер
-	GLuint fShader = glCreateShader(GL_FRAGMENT_SHADER);
-	// Передаем исходный код
-	if constexpr (LIGHT_KIND == light_kind::PointLightSource)
-		glShaderSource(fShader, 1, &PhongFragShaderPointLight, NULL);
-	if constexpr (LIGHT_KIND == light_kind::Spotlight)
-		glShaderSource(fShader, 1, &PhongFragShaderSpotlight, NULL);
-	// Компилируем шейдер
-	glCompileShader(fShader);
-	std::cout << "fragment shader \n";
-	// Функция печати лога шейдера
-	ShaderLog(fShader);
-	// Создаем программу и прикрепляем шейдеры к ней
-	Program = glCreateProgram();
-	glAttachShader(Program, vShader);
-	glAttachShader(Program, fShader);
-	// Линкуем шейдерную программу
-	glLinkProgram(Program);
-	// Проверяем статус сборки
-
-	ProgramLog(Program);
-
-	int link_ok;
-	glGetProgramiv(Program, GL_LINK_STATUS, &link_ok);
-	if (!link_ok) {
-		std::cout << "error attach shaders \n";
-		return;
+	if constexpr (SHADER_KIND == shader_kind::Phong) {
+		if constexpr (LIGHT_KIND == light_kind::PointLightSource)
+			Program = load_shaders("shaders/phong_point.vert", "shaders/phong_point.frag");
+		if constexpr (LIGHT_KIND == light_kind::DirLightSource)
+			Program = load_shaders("shaders/phong_dir.vert", "shaders/phong_dir.frag");
+		if constexpr (LIGHT_KIND == light_kind::Spotlight)
+			Program = load_shaders("shaders/phong_spot.vert", "shaders/phong_spot.frag");
+	}
+	else if constexpr (SHADER_KIND == shader_kind::OrenNayar) {
+		if constexpr (LIGHT_KIND == light_kind::PointLightSource)
+			Program = load_shaders("shaders/phong_point.vert", "shaders/oren_nayar_point.frag");
+		if constexpr (LIGHT_KIND == light_kind::DirLightSource)
+			Program = load_shaders("shaders/phong_dir.vert", "shaders/oren_nayar_dir.frag");
+		if constexpr (LIGHT_KIND == light_kind::Spotlight)
+			Program = load_shaders("shaders/phong_spot.vert", "shaders/oren_nayar_spot.frag");
 	}
 }
 
@@ -401,7 +107,8 @@ void Draw() {
 	glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
 	glUniformMatrix4fv(glGetUniformLocation(Program, "view"), 1, GL_FALSE, glm::value_ptr(view));
 
-	glm::mat4 model = glm::rotate(glm::mat4(1.0f), angleX, glm::vec3(1.0f, 0.0f, 0.0f));
+	glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -2.0f, -15.0f));
+	model = glm::scale(model, glm::vec3(3.0f, 3.0f, 3.0f));
 	glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
 	glm::mat4 projection = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.0f);
 	//model = glm::rotate(model, angleY, glm::vec3(0.0f, 1.0f, 0.0f));
@@ -411,13 +118,12 @@ void Draw() {
 	glUniformMatrix3fv(glGetUniformLocation(Program, "transform.normal"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
 	glUniform3fv(glGetUniformLocation(Program, "transform.viewPosition"), 1, glm::value_ptr(cameraPos));
 
-	//glUniformMatrix4fv(glGetUniformLocation(Program, "model"), 1, GL_FALSE, glm::value_ptr(model));
-
 	glUniform4fv(glGetUniformLocation(Program, "light.position"), 1, glm::value_ptr(light.position));
 	glUniform4fv(glGetUniformLocation(Program, "light.ambient"), 1, glm::value_ptr(light.ambient));
 	glUniform4fv(glGetUniformLocation(Program, "light.diffuse"), 1, glm::value_ptr(light.diffuse));
 	glUniform4fv(glGetUniformLocation(Program, "light.specular"), 1, glm::value_ptr(light.specular));
-	glUniform3fv(glGetUniformLocation(Program, "light.attenuation"), 1, glm::value_ptr(light.attenuation));
+	if constexpr (LIGHT_KIND != light_kind::DirLightSource)
+		glUniform3fv(glGetUniformLocation(Program, "light.attenuation"), 1, glm::value_ptr(light.attenuation));
 
 	if constexpr (LIGHT_KIND == light_kind::Spotlight) {
 		glUniform3fv(glGetUniformLocation(Program, "light.spotDirection"), 1, glm::value_ptr(light.spotDirection)); // Направление прожектора
@@ -431,6 +137,9 @@ void Draw() {
 	glUniform4f(glGetUniformLocation(Program, "material.specular"), 1.0f, 1.0f, 1.0f, 1.0f);
 	glUniform4f(glGetUniformLocation(Program, "material.emission"), 0.0f, 0.0f, 0.0f, 1.0f);
 	glUniform1f(glGetUniformLocation(Program, "material.shininess"), 32.0f);
+
+	if constexpr (SHADER_KIND == shader_kind::OrenNayar)
+		glUniform1f(glGetUniformLocation(Program, "roughness"), 0.3f); // От 0 до 1
 
 	model0.display_model(Program);
 	glUseProgram(0); // Отключаем шейдерную программу
@@ -470,7 +179,7 @@ void HandleKeyboardInput() {
 }
 
 int main() {
-	sf::Window window(sf::VideoMode(600, 600), "My OpenGL window", sf::Style::Default, sf::ContextSettings(24));
+	sf::Window window(sf::VideoMode(900, 900), "My OpenGL window", sf::Style::Default, sf::ContextSettings(24));
 	window.setVerticalSyncEnabled(true);
 	window.setActive(true);
 	glewInit();
