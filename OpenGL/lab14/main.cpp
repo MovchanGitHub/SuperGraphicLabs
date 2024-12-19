@@ -15,21 +15,38 @@ GLuint instanceVBO;
 const std::string model_path = "data/bus2.obj";
 const std::string texture_path = "data/bus2.png";
 
+enum class light_kind {PointLightSource, Spotlight};
+constexpr light_kind LIGHT_KIND = light_kind::Spotlight;
+
 glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
 glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 float yaw = -90.0f;
 float pitch = 0.0f;
 
-// точечный источник света
-glm::vec4 lightPos(3.0f, 3.0f, 3.0f, 1.0f);
-glm::vec4 lightAmbient(0.1f, 0.1f, 0.1f, 1.0f);
-glm::vec4 lightDiffuse(0.8f, 0.8f, 0.8f, 1.0f);
-glm::vec4 lightSpecular(1.0f, 1.0f, 1.0f, 1.0f);
-//glm::vec3 attenuation(1.0f, 0.09f, 0.032f);
-glm::vec3 attenuation(1.0f, 0.0f, 0.0f);
+struct Light {
+	glm::vec4 position;       // Позиция источника света
+	glm::vec3 spotDirection;  // Направление прожектора
+	float spotCosCutoff;      // Косинус угла отсечения
+	float spotExponent;       // Коэффициент экспоненциального затухания
+	glm::vec3 attenuation;    // Коэффициенты затухания (constant, linear, quadratic)
+	glm::vec4 ambient;        // Фоновая составляющая
+	glm::vec4 diffuse;        // Рассеянная составляющая
+	glm::vec4 specular;       // Зеркальная составляющая
+};
 
-// Исходный код вершинного шейдера
+Light light = {
+	glm::vec4(0.0f, 10.0f, 0.0f, 1.0f),  // Позиция прожектора (например, на высоте 5, по оси Y)
+	glm::vec3(0.0f, -1.0f, 0.0f),  // Направление светового луча вниз по оси Y
+	cos(glm::radians(20.0f)),  // Угол отсечения 30 градусов (косинус угла отсечения)
+	20.0f,  // Коэффициент экспоненциального затухания (можно регулировать для более мягкого или резкого падения света)
+	glm::vec3(1.0f, 0.1f, 0.01f),  // Коэффициенты затухания: (constant, linear, quadratic)
+	glm::vec4(0.1f, 0.1f, 0.1f, 1.0f),  // Фоновая составляющая (слабое освещение)
+	glm::vec4(1.0f, 1.0f, 1.0f, 1.0f),  // Рассеянная составляющая (освещает объекты белым светом)
+	glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)  // Зеркальная составляющая (белый свет для отражений)
+};
+
+// рудимент 
 const char* VertexShaderSource = R"(
  #version 330 core
  layout (location = 0) in vec3 position;
@@ -50,7 +67,7 @@ const char* VertexShaderSource = R"(
  }
 )";
 
-// Исходный код фрагментного шейдера из третьего задания
+// рудимент 
 const char* FragShaderSource_UniformColorInShader = R"(
  #version 330 core
  in vec2 out_tex_coord;
@@ -64,7 +81,7 @@ const char* FragShaderSource_UniformColorInShader = R"(
  }
 )";
 
-const char* PhongVertexShader = R"(
+const char* PhongVertexShaderPointLight = R"(
 #version 330 core
 
 #define VERT_POSITION 0
@@ -110,7 +127,56 @@ void main() {
 }
 )";
 
-const char* PhongFragShader = R"(
+const char* PhongVertexShaderSpotlight = R"(
+#version 330 core
+
+#define VERT_POSITION 0
+#define VERT_NORMAL 1
+#define VERT_TEXCOORD 2
+
+layout (location = VERT_POSITION) in vec3 position;
+layout (location = VERT_NORMAL) in vec3 normal;
+layout (location = VERT_TEXCOORD) in vec2 texcoord;
+
+uniform struct Transform {
+    mat4 model;
+    mat4 viewProjection;
+    mat3 normal;
+    vec3 viewPosition;
+} transform;
+
+uniform struct SpotLight {
+    vec4 position;
+    vec4 ambient;
+    vec4 diffuse;
+    vec4 specular;
+    vec3 attenuation;
+    vec3 spotDirection;
+    float spotCosCutoff;
+    float spotExponent;
+} light;
+
+out Vertex {
+    vec2 texcoord;
+    vec3 normal;
+    vec3 lightDir;
+    vec3 viewDir;
+    float distance;
+} Vert;
+
+void main() {
+    vec4 vertex = transform.model * vec4(position, 1.0);
+    vec4 lightDir = light.position - vertex;
+    gl_Position = transform.viewProjection * vertex;
+    Vert.texcoord = vec2(texcoord.x, 1.0f - texcoord.y);
+    Vert.normal = transform.normal * normal;
+    Vert.lightDir = normalize(vec3(lightDir));
+    Vert.viewDir = normalize(transform.viewPosition - vec3(vertex));
+    Vert.distance = length(lightDir);
+}
+)";
+
+const char* PhongFragShaderPointLight = R"(
 #version 330 core
 
 #define FRAG_OUTPUT0 0
@@ -164,6 +230,72 @@ void main() {
 }
 )";
 
+const char* PhongFragShaderSpotlight = R"(
+#version 330 core
+
+#define FRAG_OUTPUT0 0
+
+layout (location = FRAG_OUTPUT0) out vec4 color;
+
+uniform struct SpotLight {
+    vec4 position;
+    vec4 ambient;
+    vec4 diffuse;
+    vec4 specular;
+    vec3 attenuation;
+    vec3 spotDirection;
+    float spotCosCutoff;
+    float spotExponent;
+} light;
+
+uniform struct Material {
+    sampler2D texture;
+    vec4 ambient;
+    vec4 diffuse;
+    vec4 specular;
+    vec4 emission;
+    float shininess;
+} material;
+
+in Vertex {
+    vec2 texcoord;
+    vec3 normal;
+    vec3 lightDir;
+    vec3 viewDir;
+    float distance;
+} Vert;
+
+void main() {
+    vec3 normal = normalize(Vert.normal);
+    vec3 lightDir = normalize(Vert.lightDir);
+    vec3 viewDir = normalize(Vert.viewDir);
+
+    // Направление света от прожектора
+    vec3 spotDir = normalize(light.spotDirection);
+    // Угол между направлением прожектора и направлением к точке
+    float spotEffect = dot(spotDir, -lightDir);
+    // Ограничение зоны влияния прожектора
+    spotEffect = float(spotEffect > light.spotCosCutoff);
+    // Экспоненциальное затухание
+    spotEffect = max(pow(spotEffect, light.spotExponent), 0.0);
+
+    // Коэффициент затухания прожектора
+    float attenuation = spotEffect * (1.0 / max(light.attenuation[0] + 
+        light.attenuation[1] * Vert.distance + 
+        light.attenuation[2] * Vert.distance * Vert.distance, 0.0001));
+
+    color = material.emission;
+    color += material.ambient * light.ambient * attenuation;
+
+    float Ndot = max(dot(normal, lightDir), 0.0);
+    color += material.diffuse * light.diffuse * Ndot * attenuation;
+
+    float RdotVpow = max(pow(dot(reflect(-lightDir, normal), viewDir), material.shininess), 0.0);
+    color += material.specular * light.specular * RdotVpow * attenuation;
+
+    color *= texture(material.texture, Vert.texcoord);
+}
+)";
 
 // ID шейдерной программы
 GLuint Program;
@@ -180,11 +312,25 @@ void ShaderLog(unsigned int shader) {
 	}
 }
 
+void ProgramLog(GLuint program) {
+	GLint infoLen;
+	glGetProgramiv(program, GL_INFO_LOG_LENGTH, &infoLen);
+	if (infoLen > 0) {
+		std::vector<char> infoLog(infoLen);
+		glGetProgramInfoLog(program, infoLen, nullptr, infoLog.data());
+		std::cout << "Program linking log:\n" << infoLog.data() << std::endl;
+	}
+}
+
+
 void InitShader() {
 	// Создаем вершинный шейдер
 	GLuint vShader = glCreateShader(GL_VERTEX_SHADER);
 	// Передаем исходный код
-	glShaderSource(vShader, 1, &PhongVertexShader, NULL);
+	if constexpr (LIGHT_KIND == light_kind::PointLightSource)
+		glShaderSource(vShader, 1, &PhongVertexShaderPointLight, NULL);
+	if constexpr (LIGHT_KIND == light_kind::Spotlight)
+		glShaderSource(vShader, 1, &PhongVertexShaderSpotlight, NULL);
 	// Компилируем шейдер
 	glCompileShader(vShader);
 	std::cout << "vertex shader \n";
@@ -193,7 +339,10 @@ void InitShader() {
 	// Создаем фрагментный шейдер
 	GLuint fShader = glCreateShader(GL_FRAGMENT_SHADER);
 	// Передаем исходный код
-	glShaderSource(fShader, 1, &PhongFragShader, NULL);
+	if constexpr (LIGHT_KIND == light_kind::PointLightSource)
+		glShaderSource(fShader, 1, &PhongFragShaderPointLight, NULL);
+	if constexpr (LIGHT_KIND == light_kind::Spotlight)
+		glShaderSource(fShader, 1, &PhongFragShaderSpotlight, NULL);
 	// Компилируем шейдер
 	glCompileShader(fShader);
 	std::cout << "fragment shader \n";
@@ -206,6 +355,9 @@ void InitShader() {
 	// Линкуем шейдерную программу
 	glLinkProgram(Program);
 	// Проверяем статус сборки
+
+	ProgramLog(Program);
+
 	int link_ok;
 	glGetProgramiv(Program, GL_LINK_STATUS, &link_ok);
 	if (!link_ok) {
@@ -261,11 +413,17 @@ void Draw() {
 
 	//glUniformMatrix4fv(glGetUniformLocation(Program, "model"), 1, GL_FALSE, glm::value_ptr(model));
 
-	glUniform4fv(glGetUniformLocation(Program, "light.position"), 1, glm::value_ptr(lightPos));
-	glUniform4fv(glGetUniformLocation(Program, "light.ambient"), 1, glm::value_ptr(lightAmbient));
-	glUniform4fv(glGetUniformLocation(Program, "light.diffuse"), 1, glm::value_ptr(lightDiffuse));
-	glUniform4fv(glGetUniformLocation(Program, "light.specular"), 1, glm::value_ptr(lightSpecular));
-	glUniform3fv(glGetUniformLocation(Program, "light.attenuation"), 1, glm::value_ptr(attenuation));
+	glUniform4fv(glGetUniformLocation(Program, "light.position"), 1, glm::value_ptr(light.position));
+	glUniform4fv(glGetUniformLocation(Program, "light.ambient"), 1, glm::value_ptr(light.ambient));
+	glUniform4fv(glGetUniformLocation(Program, "light.diffuse"), 1, glm::value_ptr(light.diffuse));
+	glUniform4fv(glGetUniformLocation(Program, "light.specular"), 1, glm::value_ptr(light.specular));
+	glUniform3fv(glGetUniformLocation(Program, "light.attenuation"), 1, glm::value_ptr(light.attenuation));
+
+	if constexpr (LIGHT_KIND == light_kind::Spotlight) {
+		glUniform3fv(glGetUniformLocation(Program, "light.spotDirection"), 1, glm::value_ptr(light.spotDirection)); // Направление прожектора
+		glUniform1f(glGetUniformLocation(Program, "light.spotCosCutoff"), light.spotCosCutoff); // Косинус угла отсечения
+		glUniform1f(glGetUniformLocation(Program, "light.spotExponent"), light.spotExponent); // Экспоненциальное затухание
+	}
 
 	glUniform1i(glGetUniformLocation(Program, "material.texture"), 0); // Текстура привязана к текстурному блоку 0
 	glUniform4f(glGetUniformLocation(Program, "material.ambient"), 1.0f, 1.0f, 1.0f, 1.0f);
@@ -294,8 +452,8 @@ void Release() {
 }
 
 void HandleKeyboardInput() {
-	constexpr float cameraSpeed = 0.05f; // Скорость перемещения
-	constexpr float rotationSpeed = 0.2f;
+	constexpr float cameraSpeed = 0.1f; // Скорость перемещения
+	constexpr float rotationSpeed = 0.5f;
 
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) cameraPos += cameraSpeed * cameraFront;
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) cameraPos -= cameraSpeed * cameraFront;
