@@ -13,14 +13,14 @@
 Model model0;
 GLuint instanceVBO;
 
-const std::string model_path = "data/sphere.obj";
-const std::string texture_path = "data/tex.png";
+const std::string model_path = "data/bus2.obj";
+const std::string texture_path = "data/bus2.png";
 
 enum class light_kind {PointLightSource, Spotlight, DirLightSource};
-constexpr light_kind LIGHT_KIND = light_kind::PointLightSource;
+constexpr light_kind LIGHT_KIND = light_kind::DirLightSource;
 
-enum class shader_kind {Phong, OrenNayar};
-constexpr shader_kind SHADER_KIND = shader_kind::OrenNayar;
+enum class shader_kind {Phong, OrenNayar, Toon, ToonSpecular};
+constexpr shader_kind SHADER_KIND = shader_kind::ToonSpecular;
 
 glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
 glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
@@ -40,7 +40,7 @@ struct Light {
 };
 
 Light light = {
-	glm::vec4(0.0f, 0.0f, -10.0f, 0.0f),  // Позиция прожектора (например, на высоте 5, по оси Y)
+	glm::vec4(0.0f, 30.0f, 0.0f, 1.0f),  // Позиция прожектора (например, на высоте 5, по оси Y)
 	glm::vec3(0.0f, -1.0f, 0.0f),  // Направление светового луча вниз по оси Y
 	cos(glm::radians(20.0f)),  // Угол отсечения 30 градусов (косинус угла отсечения)
 	20.0f,  // Коэффициент экспоненциального затухания (можно регулировать для более мягкого или резкого падения света)
@@ -69,6 +69,22 @@ void InitShader() {
 			Program = load_shaders("shaders/phong_dir.vert", "shaders/oren_nayar_dir.frag");
 		if constexpr (LIGHT_KIND == light_kind::Spotlight)
 			Program = load_shaders("shaders/phong_spot.vert", "shaders/oren_nayar_spot.frag");
+	}
+	else if constexpr (SHADER_KIND == shader_kind::Toon) {
+		if constexpr (LIGHT_KIND == light_kind::PointLightSource)
+			Program = load_shaders("shaders/phong_point.vert", "shaders/toon_point.frag");
+		if constexpr (LIGHT_KIND == light_kind::DirLightSource)
+			Program = load_shaders("shaders/phong_dir.vert", "shaders/toon_dir.frag");
+		if constexpr (LIGHT_KIND == light_kind::Spotlight)
+			Program = load_shaders("shaders/phong_spot.vert", "shaders/toon_spot.frag");
+	}
+	else if constexpr (SHADER_KIND == shader_kind::ToonSpecular) {
+		if constexpr (LIGHT_KIND == light_kind::PointLightSource)
+			Program = load_shaders("shaders/phong_point.vert", "shaders/toon_spec_point.frag");
+		if constexpr (LIGHT_KIND == light_kind::DirLightSource)
+			Program = load_shaders("shaders/phong_dir.vert", "shaders/toon_spec_dir.frag");
+		if constexpr (LIGHT_KIND == light_kind::Spotlight)
+			Program = load_shaders("shaders/phong_spot.vert", "shaders/toon_spec_spot.frag");
 	}
 }
 
@@ -161,7 +177,7 @@ void Release() {
 }
 
 void HandleKeyboardInput() {
-	constexpr float cameraSpeed = 0.1f; // Скорость перемещения
+	constexpr float cameraSpeed = 0.3f; // Скорость перемещения
 	constexpr float rotationSpeed = 0.5f;
 
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) cameraPos += cameraSpeed * cameraFront;
