@@ -11,13 +11,31 @@
 #include "glm/gtc/type_ptr.hpp"
 
 Model model0;
+Model model1;
+Model model2;
+Model model3;
+Model model4;
+Model model5;
+Model model6;
+Model model7;
+Model model8;
+Model model9;
+Model model10;
 GLuint instanceVBO;
 
-const std::string model_path = "data/bus2.obj";
-const std::string texture_path = "data/bus2.png";
+const std::string model_path = "data/Cearadactylus.obj";
+const std::string texture_path = "data/Cearadactylus.jpg";
+const std::string model_path1 = "data/Elasmosaurus.obj";
+const std::string texture_path1 = "data/Elasmosaurus.jpg";
+const std::string model_path2 = "data/Triceratops.obj";
+const std::string texture_path2 = "data/Triceratops.png";
+const std::string model_path3 = "data/diplodoc.obj";
+const std::string texture_path3 = "data/diplodoc.jpg";
+const std::string model_path4 = "data/treeBirch.obj";
+const std::string texture_path4 = "data/treeBirch.jpg";
 
 enum class light_kind {PointLightSource, Spotlight, DirLightSource};
-constexpr light_kind LIGHT_KIND = light_kind::DirLightSource;
+constexpr light_kind LIGHT_KIND = light_kind::PointLightSource;
 
 enum class shader_kind {Phong, OrenNayar, Toon, ToonSpecular};
 constexpr shader_kind SHADER_KIND = shader_kind::ToonSpecular;
@@ -40,7 +58,7 @@ struct Light {
 };
 
 Light light = {
-	glm::vec4(0.0f, 30.0f, 0.0f, 1.0f),  // Позиция прожектора (например, на высоте 5, по оси Y)
+	glm::vec4(0.0f, 50.0f, 0.0f, 1.0f),  // Позиция прожектора (например, на высоте 5, по оси Y)
 	glm::vec3(0.0f, -1.0f, 0.0f),  // Направление светового луча вниз по оси Y
 	cos(glm::radians(20.0f)),  // Угол отсечения 30 градусов (косинус угла отсечения)
 	20.0f,  // Коэффициент экспоненциального затухания (можно регулировать для более мягкого или резкого падения света)
@@ -93,10 +111,17 @@ void InitShader() {
 void Init() {
 	// Шейдеры
 	InitShader();
-	InitTranslations();
 	glEnable(GL_DEPTH_TEST);
 	glClearColor(0.5, 0.5, 0.5, 0.0);
 	model0 = Model(model_path, texture_path);
+	model1 = Model(model_path1, texture_path1);
+	model2 = Model(model_path2, texture_path2);
+	model3 = Model(model_path3, texture_path3);
+	model4 = Model(model_path4, texture_path4);
+	model5 = Model(model_path4, texture_path4);
+	model6 = Model(model_path4, texture_path4);
+	model7 = Model(model_path4, texture_path4);
+	model8 = Model(model_path, texture_path);
 	glm::mat4 model = glm::rotate(glm::mat4(1.0f), glm::radians(45.0f), glm::vec3(1.0f, 1.0f, 0.0f));
 	glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -5.0f));
 	glm::mat4 projection = glm::perspective(glm::radians(45.0f), 1.0f, 0.1f, 100.0f);
@@ -123,15 +148,80 @@ void Draw() {
 	glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
 	glUniformMatrix4fv(glGetUniformLocation(Program, "view"), 1, GL_FALSE, glm::value_ptr(view));
 
-	glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -2.0f, -15.0f));
-	model = glm::scale(model, glm::vec3(3.0f, 3.0f, 3.0f));
-	glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
 	glm::mat4 projection = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.0f);
-	//model = glm::rotate(model, angleY, glm::vec3(0.0f, 1.0f, 0.0f));
 
+	glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -2.0f, -15.0f));
+	model = glm::translate(model, glm::vec3(50.0f, 60.0f, 0.0f));
+	model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));
+	model = glm::rotate(model, glm::radians(180.0f), glm::vec3(-1.0f, 0.0f, 0.0f));
+	model = glm::rotate(model, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
 	glUniformMatrix4fv(glGetUniformLocation(Program, "transform.model"), 1, GL_FALSE, glm::value_ptr(model));
-	glUniformMatrix4fv(glGetUniformLocation(Program, "transform.viewProjection"), 1, GL_FALSE, glm::value_ptr(projection * view));
 	glUniformMatrix3fv(glGetUniformLocation(Program, "transform.normal"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	model0.display_model(Program);
+
+	model = glm::translate(glm::mat4(1.0f), glm::vec3(-50.0f, -30.0f, 30.0f));
+	model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));
+	model = glm::rotate(model, glm::radians(90.0f), glm::vec3(-1.0f, 0.0f, 0.0f));
+	model = glm::rotate(model, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
+	glUniformMatrix4fv(glGetUniformLocation(Program, "transform.model"), 1, GL_FALSE, glm::value_ptr(model));
+	glUniformMatrix3fv(glGetUniformLocation(Program, "transform.normal"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	model1.display_model(Program);
+
+	model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 20.0f));
+	model = glm::scale(model, glm::vec3(2.0f, 2.0f, 2.0f));
+	normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
+	glUniformMatrix4fv(glGetUniformLocation(Program, "transform.model"), 1, GL_FALSE, glm::value_ptr(model));
+	glUniformMatrix3fv(glGetUniformLocation(Program, "transform.normal"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	model2.display_model(Program);
+
+	model = glm::translate(glm::mat4(1.0f), glm::vec3(1.5f, 0.0f, -1.0f));
+	model = glm::scale(model, glm::vec3(20.0f, 20.0f, 20.0f));
+	normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
+	glUniformMatrix4fv(glGetUniformLocation(Program, "transform.model"), 1, GL_FALSE, glm::value_ptr(model));
+	glUniformMatrix3fv(glGetUniformLocation(Program, "transform.normal"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	model3.display_model(Program);
+
+	model = glm::translate(glm::mat4(1.0f), glm::vec3(-10.0f, 0.0f, -20.0f));
+	model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));
+	normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
+	glUniformMatrix4fv(glGetUniformLocation(Program, "transform.model"), 1, GL_FALSE, glm::value_ptr(model));
+	glUniformMatrix3fv(glGetUniformLocation(Program, "transform.normal"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	model4.display_model(Program);
+
+	model = glm::translate(glm::mat4(1.0f), glm::vec3(20.0f, 0.0f, -30.0f));
+	model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));
+	normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
+	glUniformMatrix4fv(glGetUniformLocation(Program, "transform.model"), 1, GL_FALSE, glm::value_ptr(model));
+	glUniformMatrix3fv(glGetUniformLocation(Program, "transform.normal"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	model5.display_model(Program);
+
+	model = glm::translate(glm::mat4(1.0f), glm::vec3(-15.0f, 0.0f, 35.0f));
+	model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));
+	normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
+	glUniformMatrix4fv(glGetUniformLocation(Program, "transform.model"), 1, GL_FALSE, glm::value_ptr(model));
+	glUniformMatrix3fv(glGetUniformLocation(Program, "transform.normal"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	model6.display_model(Program);
+
+	model = glm::translate(glm::mat4(1.0f), glm::vec3(30.0f, 0.0f, 35.0f));
+	model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));
+	normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
+	glUniformMatrix4fv(glGetUniformLocation(Program, "transform.model"), 1, GL_FALSE, glm::value_ptr(model));
+	glUniformMatrix3fv(glGetUniformLocation(Program, "transform.normal"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	model7.display_model(Program);
+
+	model = glm::translate(glm::mat4(1.0f), glm::vec3(30.0f, 0.0f, 35.0f));
+	model = glm::translate(model, glm::vec3(-40.0f, 30.0f, 30.0f));
+	model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));
+	model = glm::rotate(model, glm::radians(165.0f), glm::vec3(-1.0f, 0.0f, 0.0f));
+	model = glm::rotate(model, glm::radians(65.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
+	glUniformMatrix4fv(glGetUniformLocation(Program, "transform.model"), 1, GL_FALSE, glm::value_ptr(model));
+	glUniformMatrix3fv(glGetUniformLocation(Program, "transform.normal"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	model8.display_model(Program);
+
+	glUniformMatrix4fv(glGetUniformLocation(Program, "transform.viewProjection"), 1, GL_FALSE, glm::value_ptr(projection * view));
 	glUniform3fv(glGetUniformLocation(Program, "transform.viewPosition"), 1, glm::value_ptr(cameraPos));
 
 	glUniform4fv(glGetUniformLocation(Program, "light.position"), 1, glm::value_ptr(light.position));
@@ -157,9 +247,9 @@ void Draw() {
 	if constexpr (SHADER_KIND == shader_kind::OrenNayar)
 		glUniform1f(glGetUniformLocation(Program, "roughness"), 0.3f); // От 0 до 1
 
-	model0.display_model(Program);
 	glUseProgram(0); // Отключаем шейдерную программу
 }
+
 
 // Освобождение шейдеров
 void ReleaseShader() {
@@ -177,18 +267,29 @@ void Release() {
 }
 
 void HandleKeyboardInput() {
-	constexpr float cameraSpeed = 0.3f; // Скорость перемещения
+	constexpr float cameraSpeed = 0.5f;
+	float cameraShiftScale = 1.0f;
 	constexpr float rotationSpeed = 0.5f;
+	constexpr float lightSpeed = 0.2f;
 
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) cameraPos += cameraSpeed * cameraFront;
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) cameraPos -= cameraSpeed * cameraFront;
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift)) cameraShiftScale = 3.0f;
+
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) cameraPos += cameraSpeed * cameraFront * cameraShiftScale;
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) cameraPos -= cameraSpeed * cameraFront * cameraShiftScale;
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed * cameraShiftScale;
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed * cameraShiftScale;
 
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up)) pitch += rotationSpeed;
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down)) pitch -= rotationSpeed;
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) yaw -= rotationSpeed;
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) yaw += rotationSpeed;
+
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::J)) light.position[0] += lightSpeed;
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::N)) light.position[0] -= lightSpeed;
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::B)) light.position[1] += lightSpeed;
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::M)) light.position[1] -= lightSpeed;
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::H)) light.position[2] += lightSpeed;
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::K)) light.position[2] -= lightSpeed;
 
 	if (pitch > 89.0f) pitch = 89.0f;
 	if (pitch < -89.0f) pitch = -89.0f;
