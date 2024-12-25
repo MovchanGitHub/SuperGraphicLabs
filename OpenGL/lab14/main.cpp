@@ -14,7 +14,6 @@ Model model0;
 Model model1;
 Model model2;
 Model tree_model;
-Model ground_model;
 GLuint instanceVBO;
 
 const std::string model_path = "data/Cearadactylus.obj";
@@ -25,8 +24,6 @@ const std::string model_path2 = "data/Triceratops.obj";
 const std::string texture_path2 = "data/Triceratops.png";
 const std::string model_path3 = "data/treeBirch.obj";
 const std::string texture_path3 = "data/treeBirch.jpg";
-const std::string model_path4 = "data/ground.obj";
-const std::string texture_path4 = "data/ground.jpg";
 
 enum class light_kind {PointLightSource, Spotlight, DirLightSource};
 constexpr light_kind LIGHT_KIND = light_kind::PointLightSource;
@@ -52,7 +49,7 @@ struct Light {
 };
 
 Light light = {
-	glm::vec4(0.0f, 50.0f, 0.0f, 1.0f),  // Позиция прожектора (например, на высоте 5, по оси Y)
+	glm::vec4(0.0f, 5.0f, 0.0f, 1.0f),  // Позиция прожектора (например, на высоте 5, по оси Y)
 	glm::vec3(0.0f, -1.0f, 0.0f),  // Направление светового луча вниз по оси Y
 	cos(glm::radians(20.0f)),  // Угол отсечения 30 градусов (косинус угла отсечения)
 	20.0f,  // Коэффициент экспоненциального затухания (можно регулировать для более мягкого или резкого падения света)
@@ -111,7 +108,6 @@ void Init() {
 	model1 = Model(model_path1, texture_path1);
 	model2 = Model(model_path2, texture_path2);
 	tree_model = Model(model_path3, texture_path3);
-	ground_model = Model(model_path4, texture_path4);
 	glm::mat4 model = glm::rotate(glm::mat4(1.0f), glm::radians(45.0f), glm::vec3(1.0f, 1.0f, 0.0f));
 	glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -5.0f));
 	glm::mat4 projection = glm::perspective(glm::radians(45.0f), 1.0f, 0.1f, 100.0f);
@@ -140,9 +136,8 @@ void Draw() {
 
 	glm::mat4 projection = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.0f);
 
-	glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -2.0f, -15.0f));
-	model = glm::translate(model, glm::vec3(0.0f, 55.0f, 35.0f));
-	model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));
+	glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, 8.0f, -1.5f));
+	model = glm::scale(model, glm::vec3(0.01f, 0.01f, 0.01f));
 	model = glm::rotate(model, glm::radians(180.0f), glm::vec3(-1.0f, 0.0f, 0.0f));
 	model = glm::rotate(model, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 	glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
@@ -150,77 +145,61 @@ void Draw() {
 	glUniformMatrix3fv(glGetUniformLocation(Program, "transform.normal"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
 	model0.display_model(Program);
 
-	model = glm::translate(glm::mat4(1.0f), glm::vec3(-50.0f, 25.0f, 30.0f));
-	model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));
+	model = glm::translate(glm::mat4(1.0f), glm::vec3(-5.0f, 10.0f, 3.0f));
+	model = glm::scale(model, glm::vec3(0.01f, 0.01f, 0.01f));
 	model = glm::rotate(model, glm::radians(90.0f), glm::vec3(-1.0f, 0.0f, 1.0f));
 	normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
 	glUniformMatrix4fv(glGetUniformLocation(Program, "transform.model"), 1, GL_FALSE, glm::value_ptr(model));
 	glUniformMatrix3fv(glGetUniformLocation(Program, "transform.normal"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
 	model1.display_model(Program);
 
-	model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 20.0f));
-	model = glm::scale(model, glm::vec3(1.6f, 1.6f, 1.6f));
+	model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
+	model = glm::scale(model, glm::vec3(0.16f, 0.16f, 0.16f));
 	normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
 	glUniformMatrix4fv(glGetUniformLocation(Program, "transform.model"), 1, GL_FALSE, glm::value_ptr(model));
 	glUniformMatrix3fv(glGetUniformLocation(Program, "transform.normal"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
 	model2.display_model(Program);
 
-	model = glm::translate(glm::mat4(1.0f), glm::vec3(15.0f, 0.0f, -1.0f));
-	model = glm::scale(model, glm::vec3(2.0f, 2.0f, 2.0f));
+	model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -5.0f));
+	model = glm::scale(model, glm::vec3(0.2f, 0.2f, 0.2f));
 	model = glm::rotate(model, glm::radians(-45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 	normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
 	glUniformMatrix4fv(glGetUniformLocation(Program, "transform.model"), 1, GL_FALSE, glm::value_ptr(model));
 	glUniformMatrix3fv(glGetUniformLocation(Program, "transform.normal"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
 	model2.display_model(Program);
 
-	model = glm::translate(glm::mat4(1.0f), glm::vec3(-10.0f, 0.0f, -20.0f));
-	model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));
+	model = glm::translate(glm::mat4(1.0f), glm::vec3(-1.0f, 0.0f, -2.0f));
+	model = glm::scale(model, glm::vec3(0.01f, 0.01f, 0.01f));
 	model = glm::rotate(model, glm::radians(90.0f), glm::vec3(-1.0f, 0.0f, 0.0f));
 	normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
 	glUniformMatrix4fv(glGetUniformLocation(Program, "transform.model"), 1, GL_FALSE, glm::value_ptr(model));
 	glUniformMatrix3fv(glGetUniformLocation(Program, "transform.normal"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
 	tree_model.display_model(Program);
 
-	model = glm::translate(glm::mat4(1.0f), glm::vec3(20.0f, 0.0f, -30.0f));
-	model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));
+	model = glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, 0.0f, -3.0f));
+	model = glm::scale(model, glm::vec3(0.01f, 0.01f, 0.01f));
 	model = glm::rotate(model, glm::radians(90.0f), glm::vec3(-1.0f, 0.0f, 0.0f));
 	normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
 	glUniformMatrix4fv(glGetUniformLocation(Program, "transform.model"), 1, GL_FALSE, glm::value_ptr(model));
 	glUniformMatrix3fv(glGetUniformLocation(Program, "transform.normal"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
 	tree_model.display_model(Program);
 
-	model = glm::translate(glm::mat4(1.0f), glm::vec3(-15.0f, 0.0f, 35.0f));
-	model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));
+	model = glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, 3.5f));
+	model = glm::scale(model, glm::vec3(0.01f, 0.01f, 0.01f));
 	model = glm::rotate(model, glm::radians(90.0f), glm::vec3(-1.0f, 0.0f, 0.0f));
 	normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
 	glUniformMatrix4fv(glGetUniformLocation(Program, "transform.model"), 1, GL_FALSE, glm::value_ptr(model));
 	glUniformMatrix3fv(glGetUniformLocation(Program, "transform.normal"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
 	tree_model.display_model(Program);
 
-	model = glm::translate(glm::mat4(1.0f), glm::vec3(30.0f, 0.0f, 35.0f));
-	model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));
+	model = glm::translate(glm::mat4(1.0f), glm::vec3(3.0f, 0.0f, 3.5f));
+	model = glm::scale(model, glm::vec3(0.01f, 0.01f, 0.01f));
 	model = glm::rotate(model, glm::radians(90.0f), glm::vec3(-1.0f, 0.0f, 0.0f));
 	normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
 	glUniformMatrix4fv(glGetUniformLocation(Program, "transform.model"), 1, GL_FALSE, glm::value_ptr(model));
 	glUniformMatrix3fv(glGetUniformLocation(Program, "transform.normal"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
 	tree_model.display_model(Program);
 
-	model = glm::translate(glm::mat4(1.0f), glm::vec3(30.0f, 0.0f, 35.0f));
-	model = glm::translate(model, glm::vec3(-30.0f, 30.0f, 30.0f));
-	model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));
-	model = glm::rotate(model, glm::radians(165.0f), glm::vec3(-1.0f, 0.0f, 0.0f));
-	model = glm::rotate(model, glm::radians(65.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
-	glUniformMatrix4fv(glGetUniformLocation(Program, "transform.model"), 1, GL_FALSE, glm::value_ptr(model));
-	glUniformMatrix3fv(glGetUniformLocation(Program, "transform.normal"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
-	model0.display_model(Program);
-
-	model = glm::translate(glm::mat4(1.0f), glm::vec3(30.0f, 0.0f, 35.0f));
-	model = glm::scale(model, glm::vec3(100.0f, 100.0f, 100.0f));
-	normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
-	glUniformMatrix4fv(glGetUniformLocation(Program, "transform.model"), 1, GL_FALSE, glm::value_ptr(model));
-	glUniformMatrix3fv(glGetUniformLocation(Program, "transform.normal"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
-	ground_model.display_model(Program);
 
 	glUniformMatrix4fv(glGetUniformLocation(Program, "transform.viewProjection"), 1, GL_FALSE, glm::value_ptr(projection * view));
 	glUniform3fv(glGetUniformLocation(Program, "transform.viewPosition"), 1, glm::value_ptr(cameraPos));
