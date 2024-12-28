@@ -34,6 +34,6 @@ void main() {
     gl_Position = transform.viewProjection * vertex;
     Vert.texcoord = vec2(texcoord.x, 1.0f - texcoord.y);
     Vert.normal = transform.normal * normal;
-    Vert.lightDir = normalize(vec3(light.position));
-    Vert.viewDir = normalize(transform.viewPosition - vec3(vertex));
+    Vert.lightDir = vec3(light.position);
+    Vert.viewDir = transform.viewPosition - vec3(vertex);
 }
